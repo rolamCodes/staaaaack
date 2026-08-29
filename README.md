@@ -44,6 +44,7 @@ Or upload `dist` in the Cloudflare dashboard. Set `VITE_CONVEX_URL` in the Pages
 - First session shows the rules once.
 - Today’s 15 words come from the server. Lists loop after day 99.
 - One 30s budget for the whole run. It ticks in every phase. Each correct word adds +1s.
+- After the computer adds, swipe up (or tap swipe up to hide) when you’ve memorized. Then rebuild.
 - After 15, the same list loops and score doubles (15, 30, 60, …).
 - One submitted run per player per UTC day. After that: See board / Back tomorrow.
 - Trophy is the global top 50 (handle, score, theme).

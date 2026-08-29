@@ -15,6 +15,8 @@ const convex = new ConvexClient(convexUrl);
 
 const gridEl = document.getElementById("grid")!;
 const stackEl = document.getElementById("stack")!;
+const stackWordsEl = document.getElementById("stack-words")!;
+const hideBtn = document.getElementById("hide") as HTMLButtonElement;
 const timerEl = document.getElementById("timer")!;
 const timerNum = timerEl.querySelector(".num")!;
 const ringSolid = timerEl.querySelector(".ring-solid") as SVGCircleElement;
@@ -63,10 +65,6 @@ function unused(): string[] {
   return words.filter((w) => !set.has(w));
 }
 
-function memorizeDwellMs(): number {
-  return 5000 + 1000 * Math.max(0, stack.length - 2);
-}
-
 function shuffle<T>(arr: T[]): T[] {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) {
@@ -108,18 +106,8 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function waitDwell(ms: number): Promise<boolean> {
-  let left = ms;
-  let last = performance.now();
-  while (left > 0) {
-    if (phase === "over" || endEl.classList.contains("show")) return false;
-    await sleep(40);
-    const now = performance.now();
-    const dt = now - last;
-    last = now;
-    if (!mem.paused) left -= dt;
-  }
-  return phase === "memorize";
+function setHideControl(on: boolean): void {
+  hideBtn.hidden = !on;
 }
 
 function makeTiles(list: string[]): void {
@@ -161,7 +149,7 @@ function paintTiles(): void {
 }
 
 function renderStack(): void {
-  stackEl.innerHTML = "";
+  stackWordsEl.innerHTML = "";
   const shown =
     phase === "stack"
       ? stack.slice(0, rebuildAt).slice().reverse()
@@ -172,9 +160,9 @@ function renderStack(): void {
     const d = document.createElement("div");
     d.className = "word";
     d.textContent = w;
-    stackEl.appendChild(d);
+    stackWordsEl.appendChild(d);
   }
-  stackEl.scrollTop = 0;
+  stackWordsEl.scrollTop = 0;
 }
 
 function flipShuffle(): Promise<void> {
@@ -298,19 +286,24 @@ function resumeMem(): void {
 function startAdd(): void {
   phase = "add";
   rebuildAt = 0;
+  setHideControl(false);
   paintTiles();
   renderStack();
   busy = false;
   startBudget();
 }
 
-async function startMemorize(): Promise<void> {
+function startMemorize(): void {
   phase = "memorize";
   busy = true;
   paintTiles();
   renderStack();
-  const ok = await waitDwell(memorizeDwellMs());
-  if (!ok) return;
+  setHideControl(true);
+}
+
+async function finishMemorize(): Promise<void> {
+  if (phase !== "memorize") return;
+  setHideControl(false);
   await startRebuild();
 }
 
@@ -318,6 +311,7 @@ async function startRebuild(): Promise<void> {
   phase = "stack";
   rebuildAt = 0;
   busy = true;
+  setHideControl(false);
   renderStack();
   paintTiles();
   await flipShuffle();
@@ -362,7 +356,7 @@ async function onTap(word: string): Promise<void> {
       renderStack();
     }
     if (phase !== "add") return;
-    await startMemorize();
+    startMemorize();
     return;
   }
   if (phase === "stack") {
@@ -399,6 +393,7 @@ async function gameOver(): Promise<void> {
   cancelMem();
   setTimerIdle();
   phase = "over";
+  setHideControl(false);
   paintTiles();
   renderStack();
   document.getElementById("end-title")!.textContent = "GAME OVER";
@@ -549,6 +544,28 @@ async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<voi
   showPlayableEnd();
   startAdd();
 }
+
+let swipeY: number | null = null;
+let swipeAt = 0;
+
+stackEl.addEventListener("pointerdown", (e) => {
+  if (phase !== "memorize") return;
+  swipeY = e.clientY;
+  swipeAt = performance.now();
+});
+window.addEventListener("pointerup", (e) => {
+  if (swipeY == null || phase !== "memorize") {
+    swipeY = null;
+    return;
+  }
+  const dy = swipeY - e.clientY;
+  const dt = performance.now() - swipeAt;
+  swipeY = null;
+  if (dy >= 64 && dt < 500) void finishMemorize();
+});
+hideBtn.addEventListener("click", () => {
+  void finishMemorize();
+});
 
 trophyBtn.addEventListener("click", (e) => {
   void openScores(e);
