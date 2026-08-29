@@ -35,12 +35,10 @@ const gateError = document.getElementById("gate-error")!;
 const gateIn = document.getElementById("gate-in")!;
 const guideEl = document.getElementById("guide")!;
 const guideGo = document.getElementById("guide-go")!;
-const guideBack = document.getElementById("guide-back") as HTMLButtonElement;
-const guideSkip = document.getElementById("guide-skip")!;
 const guideTrack = document.getElementById("guide-track")!;
 const guideViewport = document.getElementById("guide-viewport")!;
 const guideDots = [...document.querySelectorAll("#guide-dots button")];
-const GUIDE_STEPS = 3;
+const GUIDE_STEPS = 4;
 let guideStep = 0;
 
 let sessionToken = localStorage.getItem(TOKEN_KEY);
@@ -529,6 +527,7 @@ async function afterAuth(): Promise<void> {
     return;
   }
   if (!me.onboarded) {
+    await loadToday();
     showGuide(0);
     return;
   }
@@ -541,7 +540,6 @@ function showGuide(step: number): void {
   guideDots.forEach((dot, i) => {
     dot.classList.toggle("on", i === guideStep);
   });
-  guideBack.disabled = guideStep === 0;
   guideGo.textContent = guideStep === GUIDE_STEPS - 1 ? "Play" : "Next";
   guideEl.classList.add("show");
 }
@@ -553,24 +551,27 @@ async function finishGuide(): Promise<void> {
   await boot(false);
 }
 
-async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<void> {
+async function loadToday(): Promise<void> {
   cancelMem();
   setTimerIdle();
-  endEl.classList.remove("show");
-  scoresEl.classList.remove("show");
   stack = [];
   rebuildAt = 0;
   score = 0;
   endurance = false;
   endurancePass = 0;
   phase = "add";
-  submittedToday = alreadySubmitted;
-
   const today = await convex.query(api.game.getToday, {});
   words = today.words.slice();
   makeTiles(words);
   paintTiles();
   renderStack();
+}
+
+async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<void> {
+  endEl.classList.remove("show");
+  scoresEl.classList.remove("show");
+  submittedToday = alreadySubmitted;
+  await loadToday();
 
   if (alreadySubmitted) {
     document.getElementById("end-title")!.textContent = "GAME OVER";
@@ -644,13 +645,6 @@ guideGo.addEventListener("click", () => {
     return;
   }
   showGuide(guideStep + 1);
-});
-guideBack.addEventListener("click", () => {
-  if (guideStep === 0) return;
-  showGuide(guideStep - 1);
-});
-guideSkip.addEventListener("click", () => {
-  void finishGuide();
 });
 guideDots.forEach((dot, i) => {
   dot.addEventListener("click", () => {

@@ -61,24 +61,19 @@
     </form>
   </div>
   <div id="guide">
-    <div class="guide-shell">
-      <div class="guide-top">
-        <button type="button" id="guide-back" aria-label="Back">«</button>
-        <div class="guide-title">Onboarding</div>
-        <button type="button" id="guide-skip">Skip »</button>
-      </div>
+    <div class="guide-card">
       <div class="guide-viewport" id="guide-viewport">
         <div class="guide-track" id="guide-track">
-          <section class="guide-slide" data-step="0">
-            <div class="guide-kicker">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <circle cx="12" cy="12" r="9"/>
-                <path d="M12 7v5l3 2"/>
-              </svg>
-              Timer
+          <section class="guide-slide">
+            <div class="guide-visual">
+              <div class="guide-gesture" aria-hidden="true">
+                <div class="guide-finger"></div>
+              </div>
             </div>
-            <h2>You have 60 seconds.</h2>
-            <p>The clock never stops. Each correct word adds 3 seconds.</p>
+            <h2>Memorize the stack</h2>
+            <p>The goal of the game is to build the tallest stack. When you pick a word, the computer picks one too. Once you’ve memorized the stack, swipe up to hide it.</p>
+          </section>
+          <section class="guide-slide">
             <div class="guide-visual">
               <div class="guide-clock">
                 <svg viewBox="0 0 40 40" aria-hidden="true">
@@ -89,59 +84,35 @@
                 <span>60</span>
               </div>
             </div>
+            <h2>Race against the clock</h2>
+            <p>Each game starts with 60 seconds on the clock. Each word you add to the stack wins you back 3 seconds. If you run out of time, you lose.</p>
           </section>
-          <section class="guide-slide" data-step="1">
-            <div class="guide-kicker">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <rect x="4" y="14" width="16" height="6" rx="3"/>
-                <rect x="4" y="9" width="16" height="6" rx="3"/>
-                <rect x="4" y="4" width="16" height="6" rx="3"/>
-              </svg>
-              Stacking
-            </div>
-            <h2>You add. Then the computer adds.</h2>
-            <p>Rebuild oldest first. Clear all 15 and the same list loops — score doubles.</p>
+          <section class="guide-slide">
             <div class="guide-visual">
-              <div class="guide-cards">
-                <div class="guide-card back">harbor</div>
-                <div class="guide-card mid">velvet</div>
-                <div class="guide-card front">cinder</div>
+              <div class="guide-words">
+                <span>Mayo</span>
+                <span>Tomato</span>
+                <span>Cheese</span>
               </div>
             </div>
+            <h2>Daily challenge</h2>
+            <p>Come back every day for a fresh word list. Compete against other players and see where you rank on the leaderboard.</p>
           </section>
-          <section class="guide-slide" data-step="2">
-            <div class="guide-kicker">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                <path d="M12 19V5"/>
-                <path d="m5 12 7-7 7 7"/>
-              </svg>
-              Swipe up
-            </div>
-            <h2>Hide when you’ve got it.</h2>
-            <p>Swipe up on the stack. Then rebuild from the oldest word.</p>
+          <section class="guide-slide">
             <div class="guide-visual">
-              <div class="guide-swipe">
-                <div class="guide-swipe-stack">
-                  <span>cinder</span>
-                  <span>velvet</span>
-                  <span>harbor</span>
-                </div>
-                <div class="guide-swipe-hand" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 19V5"/>
-                    <path d="m5 12 7-7 7 7"/>
-                  </svg>
-                </div>
-              </div>
+              <div class="guide-mult">2×</div>
             </div>
+            <h2>Endurance</h2>
+            <p>If you manage to stack all 15 words, don’t stop. Each time you restack the list, you add a 2× multiplier to your score.</p>
           </section>
         </div>
       </div>
       <div class="guide-foot">
         <div class="guide-dots" id="guide-dots" role="tablist" aria-label="Onboarding steps">
-          <button type="button" class="on" aria-label="Timer"></button>
-          <button type="button" aria-label="Stacking"></button>
-          <button type="button" aria-label="Swipe up"></button>
+          <button type="button" class="on" aria-label="Memorize the stack"></button>
+          <button type="button" aria-label="Race against the clock"></button>
+          <button type="button" aria-label="Daily challenge"></button>
+          <button type="button" aria-label="Endurance"></button>
         </div>
         <button type="button" id="guide-go">Next</button>
       </div>
