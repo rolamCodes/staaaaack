@@ -91,6 +91,19 @@ header .logo {
   color: #fff;
   letter-spacing: -0.03em;
 }
+#stack.hiding {
+  overflow: hidden;
+}
+#stack.hiding #stack-words,
+#stack.hiding #hide {
+  animation: stack-hide-up 380ms cubic-bezier(.2, .7, .2, 1) forwards;
+}
+@keyframes stack-hide-up {
+  to {
+    transform: translateY(-120%);
+    opacity: 0;
+  }
+}
 #hide {
   flex-shrink: 0;
   display: none;
@@ -138,13 +151,17 @@ header .logo {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.tile.on {
+.tile.on,
+.tile.on:disabled {
   background: var(--yellow);
   color: #000;
+  -webkit-text-fill-color: #000;
+  opacity: 1;
 }
 .tile:disabled, .tile.is-off {
   cursor: default;
   pointer-events: none;
+  opacity: 1;
 }
 #end, #scores, #gate, #guide {
   position: absolute;

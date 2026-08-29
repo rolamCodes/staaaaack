@@ -84,19 +84,40 @@ function ensureAudio(): AudioContext {
   return audio;
 }
 
+function tone(
+  ctx: AudioContext,
+  freq: number,
+  when: number,
+  gain: number,
+  dur: number
+): void {
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = "sine";
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(gain, when);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  o.connect(g);
+  g.connect(ctx.destination);
+  o.start(when);
+  o.stop(when + dur + 0.02);
+}
+
 function beep(high: boolean): void {
   try {
     const ctx = ensureAudio();
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = "sine";
-    o.frequency.value = high ? 880 : 520;
-    g.gain.value = 0.07;
-    o.connect(g);
-    g.connect(ctx.destination);
-    o.start();
-    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.1);
-    o.stop(ctx.currentTime + 0.11);
+    tone(ctx, high ? 880 : 520, ctx.currentTime, 0.07, 0.1);
+  } catch {
+    /* ignore autoplay / closed context */
+  }
+}
+
+function beepIncrement(): void {
+  try {
+    const ctx = ensureAudio();
+    const t = ctx.currentTime;
+    tone(ctx, 740, t, 0.08, 0.07);
+    tone(ctx, 1175, t + 0.06, 0.09, 0.1);
   } catch {
     /* ignore autoplay / closed context */
   }
@@ -128,6 +149,7 @@ function makeTiles(list: string[]): void {
 
 function paintTiles(): void {
   const inStack = new Set(stack);
+  const picked = new Set(stack.slice(0, rebuildAt));
   for (const b of tiles) {
     const word = b.dataset.word ?? "";
     b.classList.remove("on", "is-off");
@@ -135,14 +157,13 @@ function paintTiles(): void {
     if (phase === "add") {
       if (inStack.has(word)) {
         b.classList.add("on", "is-off");
-        b.disabled = true;
       }
     } else if (phase === "memorize") {
-      b.disabled = true;
       b.classList.add("is-off");
       if (inStack.has(word)) b.classList.add("on");
+    } else if (phase === "stack") {
+      if (picked.has(word)) b.classList.add("on");
     } else if (phase === "over") {
-      b.disabled = true;
       b.classList.add("is-off");
     }
   }
@@ -241,6 +262,7 @@ function grantIncrement(): void {
   mem.left += INCREMENT_MS;
   mem.lastSec = Math.ceil(mem.left / 1000);
   setTimerRun(mem.left);
+  beepIncrement();
 }
 
 function loopMem(): void {
@@ -303,7 +325,12 @@ function startMemorize(): void {
 
 async function finishMemorize(): Promise<void> {
   if (phase !== "memorize") return;
+  phase = "stack";
+  stackEl.classList.add("hiding");
+  await sleep(380);
+  stackEl.classList.remove("hiding");
   setHideControl(false);
+  if (endEl.classList.contains("show")) return;
   await startRebuild();
 }
 
