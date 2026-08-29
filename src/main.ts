@@ -2,556 +2,561 @@ import "./style.css";
 import { ConvexClient } from "convex/browser";
 import { api } from "../convex/_generated/api";
 
-// SVG Assets
-const LOGO_SVG = `<svg width="200" height="40" viewBox="0 0 200 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <text x="100" y="28" text-anchor="middle" fill="#FFBF00" font-family="Geist" font-weight="800" font-size="24">staaaaack</text>
-  <line x1="10" y1="35" x2="190" y2="35" stroke="#FFBF00" stroke-width="2"/>
-  <line x1="20" y1="38" x2="180" y2="38" stroke="#FFBF00" stroke-width="2"/>
-</svg>`;
+const TOKEN_KEY = "staaaaack-session";
+const CIRC = 2 * Math.PI * 15.5;
 
-const TROPHY_SVG = `<svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M14 8h16v4h4v4h-4v4h-4v4h-8v-4h-4v-4h-4v-4h4V8z M18 24h8v4h-8v-4z M16 28h12v4H16v-4z" stroke="#9A9A9A" stroke-width="2" fill="none"/>
-</svg>`;
+const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined;
+if (!convexUrl) {
+  throw new Error("VITE_CONVEX_URL is missing. Copy .env.example to .env.local.");
+}
+const convex = new ConvexClient(convexUrl);
 
-// Convex client
-const convex = new ConvexClient(import.meta.env.VITE_CONVEX_URL);
+const gridEl = document.getElementById("grid")!;
+const stackEl = document.getElementById("stack")!;
+const timerEl = document.getElementById("timer")!;
+const timerNum = timerEl.querySelector(".num")!;
+const ringSolid = timerEl.querySelector(".ring-solid") as SVGCircleElement;
+const endEl = document.getElementById("end")!;
+const scoresEl = document.getElementById("scores")!;
+const trophyBtn = document.getElementById("trophy")!;
+const againBtn = document.getElementById("again") as HTMLButtonElement;
+const seeBoardBtn = document.getElementById("see-board") as HTMLButtonElement;
+const tomorrowEl = document.getElementById("tomorrow")!;
+const boardRows = document.getElementById("board-rows")!;
+const boardEmpty = document.getElementById("board-empty")!;
+const gateEl = document.getElementById("gate")!;
+const gateForm = document.getElementById("gate-form") as HTMLFormElement;
+const gateHandle = document.getElementById("gate-handle") as HTMLInputElement;
+const gatePass = document.getElementById("gate-pass") as HTMLInputElement;
+const gateError = document.getElementById("gate-error")!;
+const gateIn = document.getElementById("gate-in")!;
+const guideEl = document.getElementById("guide")!;
+const guideGo = document.getElementById("guide-go")!;
 
-// Auth state
-let sessionToken: string | null = localStorage.getItem("sessionToken");
-
-// Game state
-let todayData: { dayId: string; theme: string; words: string[] } | null = null;
-let gameState: "idle" | "adding" | "rebuilding" | "gameover" = "idle";
+let sessionToken = localStorage.getItem(TOKEN_KEY);
+let words: string[] = [];
+let tiles: HTMLButtonElement[] = [];
 let stack: string[] = [];
-let unusedWords: string[] = [];
-let rebuildIndex = 0;
-let score = 15;
-let passCount = 0;
-let timerSeconds = 0;
-let timerInterval: number | null = null;
-let audioContext: AudioContext | null = null;
-let hasSubmittedToday = false;
-let timerPaused = false;
+let phase: "add" | "stack" | "over" = "add";
+let rebuildAt = 0;
+let busy = false;
+let score = 0;
+let endurance = false;
+let endurancePass = 0;
+let submittedToday = false;
+let audio: AudioContext | undefined;
+const mem = {
+  duration: 0,
+  left: 0,
+  running: false,
+  paused: false,
+  raf: 0,
+  lastSec: 0,
+  started: 0,
+  onDone: null as null | (() => void),
+};
 
-// DOM elements
-const authOverlay = document.getElementById("auth-overlay")!;
-const authHandle = document.getElementById("auth-handle") as HTMLInputElement;
-const authPassword = document.getElementById(
-  "auth-password"
-) as HTMLInputElement;
-const authError = document.getElementById("auth-error")!;
-const authClaim = document.getElementById("auth-claim")!;
-const authSignin = document.getElementById("auth-signin")!;
+function unused(): string[] {
+  const set = new Set(stack);
+  return words.filter((w) => !set.has(w));
+}
 
-const onboardingOverlay = document.getElementById("onboarding-overlay")!;
-const onboardingDone = document.getElementById("onboarding-done")!;
+function nextRebuildLen(): number {
+  const remain = words.length - stack.length;
+  const add = remain >= 2 ? 2 : remain;
+  return stack.length + add;
+}
 
-const leaderboardOverlay = document.getElementById("leaderboard-overlay")!;
-const leaderboardContent = document.getElementById("leaderboard-content")!;
-const leaderboardClose = document.getElementById("leaderboard-close")!;
+function climbTimerMs(rebuildLen: number): number {
+  if (rebuildLen <= 5) return 12_000;
+  if (rebuildLen <= 10) return 18_000;
+  return 24_000;
+}
 
-const gameScreen = document.getElementById("game-screen")!;
-const trophyIcon = document.getElementById("trophy-icon")!;
-const stackPane = document.getElementById("stack-pane")!;
-const gridContainer = document.getElementById("grid-container")!;
-const timerNumber = document.getElementById("timer-number")!;
-const timerRingProgress = document.getElementById("timer-ring-progress")!;
+function enduranceTimerMs(pass: number): number {
+  if (pass === 0) return 24_000;
+  if (pass === 1) return 18_000;
+  if (pass === 2) return 13_000;
+  if (pass === 3) return 10_000;
+  return 8_000;
+}
 
-const gameOverScreen = document.getElementById("game-over-screen")!;
-const finalScore = document.getElementById("final-score")!;
-const playAgain = document.getElementById("play-again")!;
-const comeBackMessage = document.getElementById("come-back-message")!;
+function shuffle<T>(arr: T[]): T[] {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = a[i]!;
+    a[i] = a[j]!;
+    a[j] = tmp;
+  }
+  return a;
+}
 
-// Initialize
-async function init() {
-  // Insert SVG assets
-  document.getElementById("auth-logo")!.innerHTML = LOGO_SVG;
-  document.getElementById("logo-wordmark")!.innerHTML = LOGO_SVG;
-  trophyIcon.innerHTML = TROPHY_SVG;
+function ensureAudio(): AudioContext {
+  if (!audio) {
+    audio = new AudioContext();
+  }
+  if (audio.state === "suspended") void audio.resume();
+  return audio;
+}
 
-  // Set up event listeners
-  authClaim.addEventListener("click", handleClaimHandle);
-  authSignin.addEventListener("click", handleSignIn);
-  authHandle.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") handleClaimHandle();
-  });
-  authPassword.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") handleClaimHandle();
-  });
-
-  onboardingDone.addEventListener("click", handleOnboardingDone);
-  trophyIcon.addEventListener("click", showLeaderboard);
-  leaderboardClose.addEventListener("click", hideLeaderboard);
-  leaderboardOverlay.addEventListener("click", (e) => {
-    if (e.target === leaderboardOverlay) hideLeaderboard();
-  });
-  playAgain.addEventListener("click", startGame);
-
-  // Check auth
-  if (sessionToken) {
-    await checkAuth();
-  } else {
-    showAuthOverlay();
+function beep(high: boolean): void {
+  try {
+    const ctx = ensureAudio();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.value = high ? 880 : 520;
+    g.gain.value = 0.07;
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.1);
+    o.stop(ctx.currentTime + 0.11);
+  } catch {
+    /* ignore autoplay / closed context */
   }
 }
 
-function showAuthOverlay() {
-  authOverlay.classList.remove("hidden");
-  gameScreen.classList.add("hidden");
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
-function hideAuthOverlay() {
-  authOverlay.classList.add("hidden");
-  gameScreen.classList.remove("hidden");
-}
-
-async function handleClaimHandle() {
-  const handle = authHandle.value.trim();
-  const password = authPassword.value;
-
-  if (!handle || !password) {
-    authError.textContent = "Please enter handle and passphrase";
-    return;
-  }
-
-  const result = await convex.mutation(api.players.claimHandle, {
-    handle,
-    password,
-  });
-
-  if (result.success && result.token) {
-    sessionToken = result.token;
-    localStorage.setItem("sessionToken", result.token);
-    authError.textContent = "";
-    await checkAuth();
-  } else {
-    authError.textContent = result.error || "Failed to claim handle";
-  }
-}
-
-async function handleSignIn() {
-  const handle = authHandle.value.trim();
-  const password = authPassword.value;
-
-  if (!handle || !password) {
-    authError.textContent = "Please enter handle and passphrase";
-    return;
-  }
-
-  const result = await convex.mutation(api.players.signIn, {
-    handle,
-    password,
-  });
-
-  if (result.success && result.token) {
-    sessionToken = result.token;
-    localStorage.setItem("sessionToken", result.token);
-    authError.textContent = "";
-    await checkAuth();
-  } else {
-    authError.textContent = result.error || "Failed to sign in";
-  }
-}
-
-async function checkAuth() {
-  if (!sessionToken) {
-    showAuthOverlay();
-    return;
-  }
-
-  const player = await convex.query(api.players.getMe, { sessionToken });
-
-  if (!player) {
-    sessionToken = null;
-    localStorage.removeItem("sessionToken");
-    showAuthOverlay();
-    return;
-  }
-
-  hideAuthOverlay();
-
-  // Check if onboarded
-  if (!player.onboarded) {
-    showOnboarding();
-  } else {
-    await loadGame();
-  }
-}
-
-function showOnboarding() {
-  onboardingOverlay.classList.remove("hidden");
-}
-
-async function handleOnboardingDone() {
-  if (sessionToken) {
-    await convex.mutation(api.players.completeOnboarding, { sessionToken });
-    onboardingOverlay.classList.add("hidden");
-    await loadGame();
-  }
-}
-
-async function loadGame() {
-  // Get today's data
-  todayData = await convex.query(api.game.getToday, {});
-
-  // Check if already submitted
-  if (sessionToken) {
-    const submitStatus = await convex.query(api.game.checkTodaySubmitted, {
-      sessionToken,
+function makeTiles(list: string[]): void {
+  gridEl.innerHTML = "";
+  tiles = list.map((word) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "tile";
+    b.textContent = word;
+    b.dataset.word = word;
+    b.addEventListener("click", () => {
+      void onTap(word);
     });
+    gridEl.appendChild(b);
+    return b;
+  });
+}
 
-    if (submitStatus && submitStatus.submitted) {
-      hasSubmittedToday = true;
-      if (submitStatus.run) {
-        showGameOver(submitStatus.run.score, true);
+function paintTiles(): void {
+  const inStack = new Set(stack);
+  for (const b of tiles) {
+    const word = b.dataset.word ?? "";
+    b.classList.remove("on", "is-off");
+    b.disabled = false;
+    if (phase === "add") {
+      if (inStack.has(word)) {
+        b.classList.add("on", "is-off");
+        b.disabled = true;
       }
+    } else if (phase === "over") {
+      b.disabled = true;
+      b.classList.add("is-off");
+    }
+  }
+}
+
+function renderStack(): void {
+  stackEl.innerHTML = "";
+  const shown =
+    phase === "stack"
+      ? stack.slice(0, rebuildAt).slice().reverse()
+      : phase === "over"
+        ? []
+        : stack.slice().reverse();
+  for (const w of shown) {
+    const d = document.createElement("div");
+    d.className = "word";
+    d.textContent = w;
+    stackEl.appendChild(d);
+  }
+  stackEl.scrollTop = 0;
+}
+
+function flipShuffle(): Promise<void> {
+  const nodes = tiles.slice();
+  const first = new Map(nodes.map((el) => [el, el.getBoundingClientRect()]));
+  const order = shuffle(nodes);
+  order.forEach((el) => gridEl.appendChild(el));
+  tiles = order;
+  order.forEach((el) => {
+    const last = el.getBoundingClientRect();
+    const f = first.get(el);
+    if (!f) return;
+    const dx = f.left - last.left;
+    const dy = f.top - last.top;
+    if (!dx && !dy) return;
+    el.style.transition = "none";
+    el.style.transform = `translate(${dx}px,${dy}px)`;
+  });
+  void gridEl.offsetHeight;
+  order.forEach((el) => {
+    el.style.transition = "transform 480ms cubic-bezier(.2,.7,.2,1)";
+    el.style.transform = "none";
+  });
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      order.forEach((el) => {
+        el.style.transition = "";
+        el.style.transform = "";
+      });
+      resolve();
+    }, 500);
+  });
+}
+
+function setTimerIdle(): void {
+  cancelMem();
+  timerEl.className = "idle";
+  timerNum.textContent = "";
+  ringSolid.style.strokeDashoffset = "0";
+  timerEl.setAttribute("aria-hidden", "true");
+}
+
+function setTimerRun(left: number, duration: number): void {
+  timerEl.className = "run";
+  timerNum.textContent = String(Math.max(1, Math.ceil(left / 1000)));
+  const p = Math.max(0, Math.min(1, left / duration));
+  ringSolid.style.strokeDashoffset = String(CIRC * (1 - p));
+  timerEl.removeAttribute("aria-hidden");
+}
+
+function cancelMem(): void {
+  mem.running = false;
+  mem.paused = false;
+  if (mem.raf) cancelAnimationFrame(mem.raf);
+  mem.raf = 0;
+}
+
+function startCountdown(duration: number, onDone: () => void): void {
+  mem.onDone = onDone;
+  mem.duration = duration;
+  mem.left = duration;
+  mem.running = true;
+  mem.paused = false;
+  mem.started = performance.now();
+  mem.lastSec = Math.ceil(mem.left / 1000);
+  setTimerRun(mem.left, mem.duration);
+  beep(false);
+  loopMem();
+}
+
+function loopMem(): void {
+  if (!mem.running) return;
+  const step = (now: number) => {
+    if (!mem.running) return;
+    if (mem.paused) {
+      mem.raf = requestAnimationFrame(step);
       return;
     }
-  }
-
-  hasSubmittedToday = false;
-  startGame();
-}
-
-function startGame() {
-  if (hasSubmittedToday) return;
-
-  gameOverScreen.classList.add("hidden");
-  stack = [];
-  unusedWords = [...(todayData?.words || [])];
-  rebuildIndex = 0;
-  score = 15;
-  passCount = 0;
-  gameState = "adding";
-
-  renderStack();
-  renderGrid();
-  startTimer(getTimerForStackSize(1));
-}
-
-function renderStack() {
-  stackPane.innerHTML = stack
-    .map((word) => `<div class="stack-word">${word}</div>`)
-    .join("");
-}
-
-function renderGrid() {
-  gridContainer.innerHTML = "";
-
-  if (!todayData) return;
-
-  todayData.words.forEach((word) => {
-    const button = document.createElement("button");
-    button.className = "word-pill";
-    button.textContent = word;
-
-    if (gameState === "adding") {
-      if (stack.includes(word)) {
-        button.classList.add("in-stack");
-      } else {
-        button.classList.add("available");
-        button.addEventListener("click", () => handleAddClick(word));
-      }
-    } else if (gameState === "rebuilding") {
-      button.classList.add("available");
-      button.addEventListener("click", () => handleRebuildClick(word));
+    const elapsed = now - mem.started;
+    mem.left = Math.max(0, mem.duration - elapsed);
+    setTimerRun(mem.left, mem.duration);
+    const sec = Math.ceil(mem.left / 1000);
+    if (sec < mem.lastSec && mem.left > 0) {
+      mem.lastSec = sec;
+      beep(sec <= 1);
     }
+    if (mem.left <= 0) {
+      const done = mem.onDone;
+      mem.onDone = null;
+      cancelMem();
+      setTimerIdle();
+      if (done) done();
+      return;
+    }
+    mem.raf = requestAnimationFrame(step);
+  };
+  mem.raf = requestAnimationFrame(step);
+}
 
-    gridContainer.appendChild(button);
+function pauseMem(): void {
+  if (!mem.running || mem.paused) return;
+  mem.paused = true;
+  mem.left = Math.max(0, mem.duration - (performance.now() - mem.started));
+}
+
+function resumeMem(): void {
+  if (!mem.running || !mem.paused) return;
+  mem.paused = false;
+  mem.started = performance.now() - (mem.duration - mem.left);
+  mem.lastSec = Math.ceil(mem.left / 1000);
+}
+
+function startAdd(): void {
+  phase = "add";
+  rebuildAt = 0;
+  paintTiles();
+  renderStack();
+  busy = false;
+  startCountdown(climbTimerMs(nextRebuildLen()), () => {
+    void gameOver();
   });
 }
 
-async function handleAddClick(word: string) {
-  if (gameState !== "adding" || stack.includes(word)) return;
-
-  // Add player's word
-  stack.push(word);
-  unusedWords = unusedWords.filter((w) => w !== word);
+async function startRebuild(): Promise<void> {
+  phase = "stack";
+  rebuildAt = 0;
+  busy = true;
   renderStack();
-  renderGrid();
+  paintTiles();
+  await flipShuffle();
+  if (endEl.classList.contains("show")) return;
+  paintTiles();
+  busy = false;
+}
 
-  // Computer adds after delay
-  setTimeout(() => {
-    if (unusedWords.length > 0 && gameState === "adding") {
-      const randomWord =
-        unusedWords[Math.floor(Math.random() * unusedWords.length)];
-      stack.push(randomWord);
-      unusedWords = unusedWords.filter((w) => w !== randomWord);
+async function startEnduranceRound(): Promise<void> {
+  phase = "stack";
+  rebuildAt = 0;
+  busy = true;
+  startCountdown(enduranceTimerMs(endurancePass), () => {
+    void gameOver();
+  });
+  renderStack();
+  paintTiles();
+  await flipShuffle();
+  if (endEl.classList.contains("show")) return;
+  paintTiles();
+  busy = false;
+}
+
+async function onTap(word: string): Promise<void> {
+  if (busy) return;
+  if (scoresEl.classList.contains("show")) return;
+  if (endEl.classList.contains("show")) return;
+  if (gateEl.classList.contains("show")) return;
+  if (guideEl.classList.contains("show")) return;
+  ensureAudio();
+  if (phase === "add") {
+    if (stack.includes(word)) return;
+    busy = true;
+    stack.push(word);
+    paintTiles();
+    renderStack();
+    const left = unused();
+    if (left.length) {
+      await sleep(350);
+      if (phase !== "add") return;
+      const pick = left[Math.floor(Math.random() * left.length)]!;
+      stack.push(pick);
+      paintTiles();
       renderStack();
-      renderGrid();
-
-      // Check if we should start rebuild
-      if (unusedWords.length === 0 || stack.length >= 15) {
-        setTimeout(() => startRebuild(), 350);
+    }
+    if (phase !== "add") return;
+    await startRebuild();
+    return;
+  }
+  if (phase === "stack") {
+    const expected = stack[rebuildAt];
+    if (word !== expected) {
+      void gameOver();
+      return;
+    }
+    rebuildAt += 1;
+    paintTiles();
+    renderStack();
+    if (rebuildAt === stack.length) {
+      if (stack.length < 15) {
+        score = stack.length;
+        startAdd();
+        return;
       }
+      if (!endurance) {
+        endurance = true;
+        score = 15;
+        endurancePass = 0;
+      } else {
+        score *= 2;
+        endurancePass += 1;
+      }
+      mem.onDone = null;
+      cancelMem();
+      await startEnduranceRound();
     }
-  }, 350);
-}
-
-async function startRebuild() {
-  gameState = "rebuilding";
-  rebuildIndex = 0;
-
-  playBeep(440);
-  await shuffleGrid();
-
-  // Clear stack display but keep the array
-  stackPane.innerHTML = "";
-  renderGrid();
-}
-
-async function shuffleGrid() {
-  const pills = Array.from(
-    gridContainer.querySelectorAll(".word-pill")
-  ) as HTMLElement[];
-
-  // Store original positions
-  const positions = pills.map((pill) => ({
-    pill,
-    rect: pill.getBoundingClientRect(),
-  }));
-
-  // Shuffle array
-  for (let i = pills.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [pills[i], pills[j]] = [pills[j], pills[i]];
-  }
-
-  // Apply new order to DOM
-  gridContainer.innerHTML = "";
-  pills.forEach((pill) => gridContainer.appendChild(pill));
-
-  // Get new positions
-  const newPositions = pills.map((pill) => ({
-    pill,
-    rect: pill.getBoundingClientRect(),
-  }));
-
-  // Calculate and apply transforms
-  positions.forEach((oldPos) => {
-    const newPos = newPositions.find((np) => np.pill === oldPos.pill);
-    if (newPos) {
-      const deltaX = oldPos.rect.left - newPos.rect.left;
-      const deltaY = oldPos.rect.top - newPos.rect.top;
-
-      oldPos.pill.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
-      oldPos.pill.classList.add("shuffling");
-    }
-  });
-
-  // Animate to new positions
-  await new Promise((resolve) => {
-    requestAnimationFrame(() => {
-      pills.forEach((pill) => {
-        pill.style.transform = "";
-      });
-
-      setTimeout(() => {
-        pills.forEach((pill) => pill.classList.remove("shuffling"));
-        resolve(null);
-      }, 480);
-    });
-  });
-}
-
-function handleRebuildClick(word: string) {
-  if (gameState !== "rebuilding") return;
-
-  const expected = stack[rebuildIndex];
-
-  if (word === expected) {
-    // Correct!
-    rebuildIndex++;
-
-    // Add to stack display
-    const stackWord = document.createElement("div");
-    stackWord.className = "stack-word";
-    stackWord.textContent = word;
-    stackPane.insertBefore(stackWord, stackPane.firstChild);
-
-    if (rebuildIndex >= stack.length) {
-      // Pass complete!
-      handlePassComplete();
-    }
-  } else {
-    // Wrong!
-    endGame();
   }
 }
 
-async function handlePassComplete() {
-  passCount++;
+async function gameOver(): Promise<void> {
+  if (phase === "over") return;
+  cancelMem();
+  setTimerIdle();
+  phase = "over";
+  paintTiles();
+  renderStack();
+  document.getElementById("end-title")!.textContent = "GAME OVER";
+  document.getElementById("end-score")!.textContent = String(score);
+  endEl.classList.add("show");
 
-  if (stack.length >= 15) {
-    // Endurance mode
-    score *= 2;
-    rebuildIndex = 0;
-
-    // Calculate new timer based on pass count
-    const newTimer = getEnduranceTimer(passCount);
-    stopTimer();
-    startTimer(newTimer);
-
-    playBeep(440);
-    await shuffleGrid();
-
-    stackPane.innerHTML = "";
-    gameState = "rebuilding";
-    renderGrid();
-  } else {
-    // Continue adding
-    gameState = "adding";
-    stopTimer();
-    startTimer(getTimerForStackSize(stack.length + 1));
-    renderGrid();
-  }
-}
-
-function getTimerForStackSize(size: number): number {
-  if (size <= 5) return 12;
-  if (size <= 10) return 18;
-  return 24;
-}
-
-function getEnduranceTimer(pass: number): number {
-  if (pass === 1) return 24;
-  if (pass === 2) return 18;
-  if (pass === 3) return 13;
-  if (pass === 4) return 10;
-  return 8;
-}
-
-function startTimer(seconds: number) {
-  timerSeconds = seconds;
-  timerPaused = false;
-  updateTimerDisplay();
-
-  timerInterval = window.setInterval(() => {
-    if (timerPaused) return;
-
-    timerSeconds -= 0.1;
-
-    if (timerSeconds <= 1 && timerSeconds > 0) {
-      playBeep(880);
-    }
-
-    if (timerSeconds <= 0) {
-      endGame();
-    }
-
-    updateTimerDisplay();
-  }, 100);
-}
-
-function stopTimer() {
-  if (timerInterval) {
-    clearInterval(timerInterval);
-    timerInterval = null;
-  }
-}
-
-function pauseTimer() {
-  timerPaused = true;
-}
-
-function resumeTimer() {
-  timerPaused = false;
-}
-
-function updateTimerDisplay() {
-  const displaySeconds = Math.ceil(Math.max(0, timerSeconds));
-  timerNumber.textContent = displaySeconds.toString();
-
-  // Update ring
-  const maxTime = gameState === "adding" ? getTimerForStackSize(stack.length || 1) : getEnduranceTimer(passCount);
-  const progress = timerSeconds / maxTime;
-  const circumference = 2 * Math.PI * 45;
-  const offset = circumference * (1 - progress);
-  timerRingProgress.style.strokeDashoffset = offset.toString();
-}
-
-function playBeep(frequency: number) {
-  if (!audioContext) {
-    audioContext = new AudioContext();
-  }
-
-  const oscillator = audioContext.createOscillator();
-  const gainNode = audioContext.createGain();
-
-  oscillator.connect(gainNode);
-  gainNode.connect(audioContext.destination);
-
-  oscillator.frequency.value = frequency;
-  oscillator.type = "sine";
-
-  gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(
-    0.01,
-    audioContext.currentTime + 0.1
-  );
-
-  oscillator.start(audioContext.currentTime);
-  oscillator.stop(audioContext.currentTime + 0.1);
-}
-
-async function endGame() {
-  stopTimer();
-  gameState = "gameover";
-
-  // Submit score
-  if (sessionToken && !hasSubmittedToday) {
-    const result = await convex.mutation(api.game.submitRun, {
+  if (sessionToken && !submittedToday) {
+    submittedToday = true;
+    await convex.mutation(api.game.submitRun, {
       sessionToken,
       score,
     });
-
-    if (result.success) {
-      hasSubmittedToday = true;
-    }
   }
 
-  showGameOver(score, hasSubmittedToday);
+  showConsumedEnd();
 }
 
-function showGameOver(finalScoreValue: number, submitted: boolean) {
-  gameOverScreen.classList.remove("hidden");
-  finalScore.textContent = finalScoreValue.toString();
+function showConsumedEnd(): void {
+  againBtn.hidden = true;
+  seeBoardBtn.hidden = false;
+  tomorrowEl.hidden = false;
+}
 
-  if (submitted) {
-    playAgain.style.display = "none";
-    comeBackMessage.classList.remove("hidden");
+function showPlayableEnd(): void {
+  againBtn.hidden = false;
+  seeBoardBtn.hidden = true;
+  tomorrowEl.hidden = true;
+}
+
+async function openScores(e: Event): Promise<void> {
+  e.stopPropagation();
+  const open = scoresEl.classList.contains("show");
+  if (open) {
+    scoresEl.classList.remove("show");
+    resumeMem();
+    return;
+  }
+  pauseMem();
+  boardRows.innerHTML = "";
+  boardEmpty.hidden = true;
+  const rows = await convex.query(api.game.leaderboard, {});
+  if (!rows.length) {
+    boardEmpty.hidden = false;
   } else {
-    playAgain.style.display = "block";
-    comeBackMessage.classList.add("hidden");
+    boardRows.innerHTML = rows
+      .map(
+        (row) => `<div class="board-row">
+        <div class="board-handle">${escapeHtml(row.handle)}</div>
+        <div class="board-score">${row.score}</div>
+        <div class="board-theme">${escapeHtml(row.theme)}</div>
+      </div>`
+      )
+      .join("");
   }
+  scoresEl.classList.add("show");
 }
 
-async function showLeaderboard() {
-  pauseTimer();
-  leaderboardOverlay.classList.remove("hidden");
-
-  const leaders = await convex.query(api.game.leaderboard, {});
-
-  leaderboardContent.innerHTML = leaders
-    .map(
-      (entry, index) => `
-    <div class="leaderboard-row">
-      <div class="leaderboard-rank">${index + 1}</div>
-      <div class="leaderboard-info">
-        <div class="leaderboard-handle">${entry.handle}</div>
-        <div class="leaderboard-theme">${entry.theme}</div>
-      </div>
-      <div class="leaderboard-score">${entry.score}</div>
-    </div>
-  `
-    )
-    .join("");
+function closeScores(e: Event): void {
+  if (e.target !== scoresEl) return;
+  scoresEl.classList.remove("show");
+  resumeMem();
 }
 
-function hideLeaderboard() {
-  leaderboardOverlay.classList.add("hidden");
-  resumeTimer();
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!
+  );
 }
 
-// Start the app
-init();
+function showGateError(msg: string): void {
+  gateError.hidden = false;
+  gateError.textContent = msg;
+}
+
+async function submitAuth(mode: "claim" | "signin"): Promise<void> {
+  const handle = gateHandle.value.trim();
+  const password = gatePass.value;
+  gateError.hidden = true;
+  if (!handle || !password) {
+    showGateError("Enter a handle and passphrase");
+    return;
+  }
+  const fn = mode === "claim" ? api.auth.claimHandle : api.auth.signIn;
+  const result = await convex.action(fn, { handle, password });
+  if (!result.success || !result.token) {
+    showGateError(result.error ?? "Could not sign in");
+    return;
+  }
+  sessionToken = result.token;
+  localStorage.setItem(TOKEN_KEY, result.token);
+  gateEl.classList.remove("show");
+  await afterAuth();
+}
+
+async function afterAuth(): Promise<void> {
+  if (!sessionToken) {
+    gateEl.classList.add("show");
+    return;
+  }
+  const me = await convex.query(api.players.getMe, { sessionToken });
+  if (!me) {
+    sessionToken = null;
+    localStorage.removeItem(TOKEN_KEY);
+    gateEl.classList.add("show");
+    return;
+  }
+  if (!me.onboarded) {
+    guideEl.classList.add("show");
+    return;
+  }
+  await boot(me.todaySubmitted, me.todayScore);
+}
+
+async function finishGuide(): Promise<void> {
+  if (!sessionToken) return;
+  await convex.mutation(api.players.completeOnboarding, { sessionToken });
+  guideEl.classList.remove("show");
+  await boot(false);
+}
+
+async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<void> {
+  cancelMem();
+  setTimerIdle();
+  endEl.classList.remove("show");
+  scoresEl.classList.remove("show");
+  stack = [];
+  rebuildAt = 0;
+  score = 0;
+  endurance = false;
+  endurancePass = 0;
+  phase = "add";
+  submittedToday = alreadySubmitted;
+
+  const today = await convex.query(api.game.getToday, {});
+  words = today.words.slice();
+  makeTiles(words);
+  paintTiles();
+  renderStack();
+
+  if (alreadySubmitted) {
+    document.getElementById("end-title")!.textContent = "GAME OVER";
+    document.getElementById("end-score")!.textContent = String(todayScore ?? 0);
+    endEl.classList.add("show");
+    showConsumedEnd();
+    return;
+  }
+
+  showPlayableEnd();
+  startAdd();
+}
+
+trophyBtn.addEventListener("click", (e) => {
+  void openScores(e);
+});
+scoresEl.addEventListener("click", closeScores);
+againBtn.addEventListener("click", () => {
+  if (submittedToday) return;
+  void boot(false);
+});
+seeBoardBtn.addEventListener("click", (e) => {
+  void openScores(e);
+});
+gateForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  void submitAuth("claim");
+});
+gateIn.addEventListener("click", () => {
+  void submitAuth("signin");
+});
+guideGo.addEventListener("click", () => {
+  void finishGuide();
+});
+
+if (sessionToken) {
+  void afterAuth();
+} else {
+  gateEl.classList.add("show");
+}

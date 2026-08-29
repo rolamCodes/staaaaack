@@ -1,5 +1,22 @@
 export const LAUNCH_DAY = "2026-08-29T00:00:00.000Z";
 
+export type DailyList = {
+  theme: string;
+  words: string[];
+};
+
+export function getTodayInfo(now = Date.now()): {
+  dayId: string;
+  theme: string;
+  words: string[];
+} {
+  const launch = Date.parse(LAUNCH_DAY);
+  const dayIndex = Math.floor((now - launch) / 86_400_000);
+  const list = dailyLists[(((dayIndex % 100) + 100) % 100) as number] as DailyList;
+  const dayId = new Date(now).toISOString().slice(0, 10);
+  return { dayId, theme: list.theme, words: list.words.slice() };
+}
+
 export const dailyLists = [
   {"theme":"Sandwich","words":["Cheese","Tomato","Mayo","Bread","Mustard","Lettuce","Tuna","Ham","Turkey","Ketchup","Onion","Pickles","Salt","Pepper","Bacon"]},
   {"theme":"Ocean","words":["Wave","Tide","Coral","Kelp","Shark","Whale","Current","Foam","Reef","Shell","Otter","Dolphin","Spray","Cove","Anemone"]},

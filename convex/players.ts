@@ -1,209 +1,146 @@
-import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import {
+  internalMutation,
+  internalQuery,
+  mutation,
+  query,
+} from "./_generated/server";
+import { hashSessionToken } from "./lib/session";
+import { getTodayInfo } from "./lists";
 
-// Helper to generate random hex string (for session tokens)
-function generateRandomToken(): string {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return Array.from(array, (byte) => byte.toString(16).padStart(2, "0")).join(
-    ""
-  );
-}
-
-// Simple hash for session tokens (for lookup only)
-function hashSessionToken(token: string): string {
-  let hash = 0;
-  for (let i = 0; i < token.length; i++) {
-    const char = token.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(16);
-}
-
-// Simple password hashing (for demo - in production use PBKDF2 in an action)
-async function hashPassword(
-  password: string,
-  salt: string
-): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password + salt);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-export const claimHandle = mutation({
+export const insertPlayer = internalMutation({
   args: {
     handle: v.string(),
-    password: v.string(),
+    handleLower: v.string(),
+    passwordHash: v.string(),
+    passwordSalt: v.string(),
+    sessionTokenHash: v.string(),
   },
-  returns: v.object({
-    success: v.boolean(),
-    token: v.optional(v.string()),
-    error: v.optional(v.string()),
-  }),
+  returns: v.union(
+    v.object({ ok: v.literal(true) }),
+    v.object({ ok: v.literal(false), error: v.string() })
+  ),
   handler: async (ctx, args) => {
-    // Validate handle
-    if (!/^[a-zA-Z0-9_]{3,16}$/.test(args.handle)) {
-      return {
-        success: false,
-        error: "Handle must be 3-16 chars, alphanumeric and underscore only",
-      };
-    }
-
-    // Validate passphrase
-    if (args.password.length < 6) {
-      return {
-        success: false,
-        error: "Passphrase must be at least 6 characters",
-      };
-    }
-
-    const handleLower = args.handle.toLowerCase();
-
-    // Check if handle exists (case-insensitive)
     const existing = await ctx.db
       .query("players")
-      .withIndex("by_handle", (q) => q.eq("handleLower", handleLower))
-      .first();
+      .withIndex("by_handle", (q) => q.eq("handleLower", args.handleLower))
+      .unique();
 
     if (existing) {
-      return {
-        success: false,
-        error: "Handle already taken",
-      };
+      return { ok: false as const, error: "Handle already taken" };
     }
 
-    // Generate salt and hash password
-    const salt = generateRandomToken();
-    const passwordHash = await hashPassword(args.password, salt);
-
-    // Generate session token
-    const sessionToken = generateRandomToken();
-    const sessionTokenHash = hashSessionToken(sessionToken);
-
-    // Create player
     await ctx.db.insert("players", {
       handle: args.handle,
-      handleLower,
-      passwordHash,
-      passwordSalt: salt,
-      sessionTokenHash,
+      handleLower: args.handleLower,
+      passwordHash: args.passwordHash,
+      passwordSalt: args.passwordSalt,
+      sessionTokenHash: args.sessionTokenHash,
       onboarded: false,
       createdAt: Date.now(),
     });
 
+    return { ok: true as const };
+  },
+});
+
+export const getAuthByHandle = internalQuery({
+  args: { handleLower: v.string() },
+  returns: v.union(
+    v.object({
+      _id: v.id("players"),
+      passwordHash: v.string(),
+      passwordSalt: v.string(),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, args) => {
+    const player = await ctx.db
+      .query("players")
+      .withIndex("by_handle", (q) => q.eq("handleLower", args.handleLower))
+      .unique();
+
+    if (!player) return null;
     return {
-      success: true,
-      token: sessionToken,
+      _id: player._id,
+      passwordHash: player.passwordHash,
+      passwordSalt: player.passwordSalt,
     };
   },
 });
 
-export const signIn = mutation({
+export const setSession = internalMutation({
   args: {
-    handle: v.string(),
-    password: v.string(),
+    playerId: v.id("players"),
+    sessionTokenHash: v.string(),
   },
-  returns: v.object({
-    success: v.boolean(),
-    token: v.optional(v.string()),
-    error: v.optional(v.string()),
-  }),
+  returns: v.null(),
   handler: async (ctx, args) => {
-    const handleLower = args.handle.toLowerCase();
-
-    // Find player
-    const player = await ctx.db
-      .query("players")
-      .withIndex("by_handle", (q) => q.eq("handleLower", handleLower))
-      .first();
-
-    if (!player) {
-      return {
-        success: false,
-        error: "Invalid handle or passphrase",
-      };
-    }
-
-    // Verify password
-    const passwordHash = await hashPassword(args.password, player.passwordSalt);
-
-    if (passwordHash !== player.passwordHash) {
-      return {
-        success: false,
-        error: "Invalid handle or passphrase",
-      };
-    }
-
-    // Generate new session token
-    const sessionToken = generateRandomToken();
-    const sessionTokenHash = hashSessionToken(sessionToken);
-
-    // Update session token
-    await ctx.db.patch(player._id, { sessionTokenHash });
-
-    return {
-      success: true,
-      token: sessionToken,
-    };
+    await ctx.db.patch(args.playerId, {
+      sessionTokenHash: args.sessionTokenHash,
+    });
+    return null;
   },
 });
 
 export const getMe = query({
-  args: {
-    sessionToken: v.string(),
-  },
+  args: { sessionToken: v.string() },
   returns: v.union(
     v.object({
       _id: v.id("players"),
       handle: v.string(),
       onboarded: v.boolean(),
+      todaySubmitted: v.boolean(),
+      todayScore: v.optional(v.number()),
     }),
     v.null()
   ),
   handler: async (ctx, args) => {
-    const sessionTokenHash = hashSessionToken(args.sessionToken);
-
+    const sessionTokenHash = await hashSessionToken(args.sessionToken);
     const player = await ctx.db
       .query("players")
-      .withIndex("by_session", (q) => q.eq("sessionTokenHash", sessionTokenHash))
-      .first();
+      .withIndex("by_session", (q) =>
+        q.eq("sessionTokenHash", sessionTokenHash)
+      )
+      .unique();
 
-    if (!player) {
-      return null;
-    }
+    if (!player) return null;
+
+    const { dayId } = getTodayInfo();
+    const run = await ctx.db
+      .query("runs")
+      .withIndex("by_player_and_day", (q) =>
+        q.eq("playerId", player._id).eq("dayId", dayId)
+      )
+      .unique();
 
     return {
       _id: player._id,
       handle: player.handle,
       onboarded: player.onboarded,
+      todaySubmitted: Boolean(run),
+      todayScore: run ? run.score : undefined,
     };
   },
 });
 
 export const completeOnboarding = mutation({
-  args: {
-    sessionToken: v.string(),
-  },
-  returns: v.object({
-    success: v.boolean(),
-  }),
+  args: { sessionToken: v.string() },
+  returns: v.object({ success: v.boolean() }),
   handler: async (ctx, args) => {
-    const sessionTokenHash = hashSessionToken(args.sessionToken);
-
+    const sessionTokenHash = await hashSessionToken(args.sessionToken);
     const player = await ctx.db
       .query("players")
-      .withIndex("by_session", (q) => q.eq("sessionTokenHash", sessionTokenHash))
-      .first();
+      .withIndex("by_session", (q) =>
+        q.eq("sessionTokenHash", sessionTokenHash)
+      )
+      .unique();
 
     if (!player) {
       throw new Error("Not authenticated");
     }
 
     await ctx.db.patch(player._id, { onboarded: true });
-
     return { success: true };
   },
 });
