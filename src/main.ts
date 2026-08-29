@@ -37,7 +37,7 @@ let sessionToken = localStorage.getItem(TOKEN_KEY);
 let words: string[] = [];
 let tiles: HTMLButtonElement[] = [];
 let stack: string[] = [];
-let phase: "add" | "stack" | "over" = "add";
+let phase: "add" | "memorize" | "stack" | "over" = "add";
 let rebuildAt = 0;
 let busy = false;
 let score = 0;
@@ -71,6 +71,10 @@ function climbTimerMs(rebuildLen: number): number {
   if (rebuildLen <= 5) return 12_000;
   if (rebuildLen <= 10) return 18_000;
   return 24_000;
+}
+
+function memorizeDwellMs(): number {
+  return 5000 + 1000 * Math.max(0, stack.length - 2);
 }
 
 function enduranceTimerMs(pass: number): number {
@@ -122,6 +126,20 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+async function waitDwell(ms: number): Promise<boolean> {
+  let left = ms;
+  let last = performance.now();
+  while (left > 0) {
+    if (phase === "over" || endEl.classList.contains("show")) return false;
+    await sleep(40);
+    const now = performance.now();
+    const dt = now - last;
+    last = now;
+    if (!mem.paused) left -= dt;
+  }
+  return phase === "memorize";
+}
+
 function makeTiles(list: string[]): void {
   gridEl.innerHTML = "";
   tiles = list.map((word) => {
@@ -149,6 +167,10 @@ function paintTiles(): void {
         b.classList.add("on", "is-off");
         b.disabled = true;
       }
+    } else if (phase === "memorize") {
+      b.disabled = true;
+      b.classList.add("is-off");
+      if (inStack.has(word)) b.classList.add("on");
     } else if (phase === "over") {
       b.disabled = true;
       b.classList.add("is-off");
@@ -294,6 +316,16 @@ function startAdd(): void {
   });
 }
 
+async function startMemorize(): Promise<void> {
+  phase = "memorize";
+  busy = true;
+  paintTiles();
+  renderStack();
+  const ok = await waitDwell(memorizeDwellMs());
+  if (!ok) return;
+  await startRebuild();
+}
+
 async function startRebuild(): Promise<void> {
   phase = "stack";
   rebuildAt = 0;
@@ -344,7 +376,7 @@ async function onTap(word: string): Promise<void> {
       renderStack();
     }
     if (phase !== "add") return;
-    await startRebuild();
+    await startMemorize();
     return;
   }
   if (phase === "stack") {
