@@ -4,8 +4,8 @@ import { api } from "../convex/_generated/api";
 
 const TOKEN_KEY = "staaaaack-session";
 const CIRC = 2 * Math.PI * 15.5;
-const START_BUDGET_MS = 30_000;
-const INCREMENT_MS = 1_000;
+const START_BUDGET_MS = 60_000;
+const INCREMENT_MS = 3_000;
 
 const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined;
 if (!convexUrl) {
@@ -16,7 +16,6 @@ const convex = new ConvexClient(convexUrl);
 const gridEl = document.getElementById("grid")!;
 const stackEl = document.getElementById("stack")!;
 const stackWordsEl = document.getElementById("stack-words")!;
-const hideBtn = document.getElementById("hide") as HTMLButtonElement;
 const timerEl = document.getElementById("timer")!;
 const timerNum = timerEl.querySelector(".num")!;
 const ringSolid = timerEl.querySelector(".ring-solid") as SVGCircleElement;
@@ -36,6 +35,13 @@ const gateError = document.getElementById("gate-error")!;
 const gateIn = document.getElementById("gate-in")!;
 const guideEl = document.getElementById("guide")!;
 const guideGo = document.getElementById("guide-go")!;
+const guideBack = document.getElementById("guide-back") as HTMLButtonElement;
+const guideSkip = document.getElementById("guide-skip")!;
+const guideTrack = document.getElementById("guide-track")!;
+const guideViewport = document.getElementById("guide-viewport")!;
+const guideDots = [...document.querySelectorAll("#guide-dots button")];
+const GUIDE_STEPS = 3;
+let guideStep = 0;
 
 let sessionToken = localStorage.getItem(TOKEN_KEY);
 let words: string[] = [];
@@ -125,10 +131,6 @@ function beepIncrement(): void {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
-}
-
-function setHideControl(on: boolean): void {
-  hideBtn.hidden = !on;
 }
 
 function makeTiles(list: string[]): void {
@@ -308,7 +310,7 @@ function resumeMem(): void {
 function startAdd(): void {
   phase = "add";
   rebuildAt = 0;
-  setHideControl(false);
+  stackEl.classList.remove("memorize");
   paintTiles();
   renderStack();
   busy = false;
@@ -318,9 +320,9 @@ function startAdd(): void {
 function startMemorize(): void {
   phase = "memorize";
   busy = true;
+  stackEl.classList.add("memorize");
   paintTiles();
   renderStack();
-  setHideControl(true);
 }
 
 async function finishMemorize(): Promise<void> {
@@ -328,8 +330,7 @@ async function finishMemorize(): Promise<void> {
   phase = "stack";
   stackEl.classList.add("hiding");
   await sleep(380);
-  stackEl.classList.remove("hiding");
-  setHideControl(false);
+  stackEl.classList.remove("hiding", "memorize");
   if (endEl.classList.contains("show")) return;
   await startRebuild();
 }
@@ -338,7 +339,7 @@ async function startRebuild(): Promise<void> {
   phase = "stack";
   rebuildAt = 0;
   busy = true;
-  setHideControl(false);
+  stackEl.classList.remove("memorize");
   renderStack();
   paintTiles();
   await flipShuffle();
@@ -420,7 +421,7 @@ async function gameOver(): Promise<void> {
   cancelMem();
   setTimerIdle();
   phase = "over";
-  setHideControl(false);
+  stackEl.classList.remove("memorize");
   paintTiles();
   renderStack();
   document.getElementById("end-title")!.textContent = "GAME OVER";
@@ -528,10 +529,21 @@ async function afterAuth(): Promise<void> {
     return;
   }
   if (!me.onboarded) {
-    guideEl.classList.add("show");
+    showGuide(0);
     return;
   }
   await boot(me.todaySubmitted, me.todayScore);
+}
+
+function showGuide(step: number): void {
+  guideStep = Math.max(0, Math.min(GUIDE_STEPS - 1, step));
+  guideTrack.style.transform = `translateX(-${guideStep * 100}%)`;
+  guideDots.forEach((dot, i) => {
+    dot.classList.toggle("on", i === guideStep);
+  });
+  guideBack.disabled = guideStep === 0;
+  guideGo.textContent = guideStep === GUIDE_STEPS - 1 ? "Play" : "Next";
+  guideEl.classList.add("show");
 }
 
 async function finishGuide(): Promise<void> {
@@ -574,24 +586,38 @@ async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<voi
 
 let swipeY: number | null = null;
 let swipeAt = 0;
+let swipeFired = false;
+
+function maybeSwipeHide(clientY: number): void {
+  if (swipeY == null || phase !== "memorize" || swipeFired) return;
+  const dy = swipeY - clientY;
+  const dt = performance.now() - swipeAt;
+  if (dy >= 56 && dt < 700) {
+    swipeFired = true;
+    swipeY = null;
+    void finishMemorize();
+  }
+}
 
 stackEl.addEventListener("pointerdown", (e) => {
   if (phase !== "memorize") return;
+  e.preventDefault();
+  stackEl.setPointerCapture(e.pointerId);
   swipeY = e.clientY;
   swipeAt = performance.now();
+  swipeFired = false;
+});
+stackEl.addEventListener("pointermove", (e) => {
+  maybeSwipeHide(e.clientY);
 });
 window.addEventListener("pointerup", (e) => {
-  if (swipeY == null || phase !== "memorize") {
-    swipeY = null;
-    return;
-  }
-  const dy = swipeY - e.clientY;
-  const dt = performance.now() - swipeAt;
+  maybeSwipeHide(e.clientY);
   swipeY = null;
-  if (dy >= 64 && dt < 500) void finishMemorize();
+  swipeFired = false;
 });
-hideBtn.addEventListener("click", () => {
-  void finishMemorize();
+window.addEventListener("pointercancel", () => {
+  swipeY = null;
+  swipeFired = false;
 });
 
 trophyBtn.addEventListener("click", (e) => {
@@ -613,7 +639,38 @@ gateIn.addEventListener("click", () => {
   void submitAuth("signin");
 });
 guideGo.addEventListener("click", () => {
+  if (guideStep >= GUIDE_STEPS - 1) {
+    void finishGuide();
+    return;
+  }
+  showGuide(guideStep + 1);
+});
+guideBack.addEventListener("click", () => {
+  if (guideStep === 0) return;
+  showGuide(guideStep - 1);
+});
+guideSkip.addEventListener("click", () => {
   void finishGuide();
+});
+guideDots.forEach((dot, i) => {
+  dot.addEventListener("click", () => {
+    showGuide(i);
+  });
+});
+
+let guideSwipeX: number | null = null;
+guideViewport.addEventListener("pointerdown", (e) => {
+  guideSwipeX = e.clientX;
+});
+window.addEventListener("pointerup", (e) => {
+  if (guideSwipeX == null || !guideEl.classList.contains("show")) {
+    guideSwipeX = null;
+    return;
+  }
+  const dx = e.clientX - guideSwipeX;
+  guideSwipeX = null;
+  if (dx <= -48) showGuide(guideStep + 1);
+  if (dx >= 48) showGuide(guideStep - 1);
 });
 
 if (sessionToken) {
