@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Staaaaack</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@600;800&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Auth overlay -->
+      <div id="auth-overlay" class="overlay hidden">
+        <div class="auth-container">
+          <div id="auth-logo"></div>
+          <div id="auth-form">
+            <input
+              type="text"
+              id="auth-handle"
+              placeholder="Handle"
+              autocomplete="username"
+            />
+            <input
+              type="password"
+              id="auth-password"
+              placeholder="Passphrase"
+              autocomplete="current-password"
+            />
+            <div id="auth-error" class="error-message"></div>
+            <button id="auth-claim" class="btn-primary">Claim Handle</button>
+            <button id="auth-signin" class="btn-secondary">Sign In</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Onboarding overlay -->
+      <div id="onboarding-overlay" class="overlay hidden">
+        <div class="onboarding-container">
+          <h2>How to Play</h2>
+          <div class="onboarding-content">
+            <p>• One game per day with a themed word list</p>
+            <p>• ADD and REBUILD share one timer</p>
+            <p>• During ADD: tap a word, computer adds another</p>
+            <p>• Grid shuffles, rebuild oldest-first</p>
+            <p>• Each successful pass doubles your score</p>
+            <p>• Wrong tap or timeout = game over</p>
+            <p>• Trophy shows the global leaderboard</p>
+          </div>
+          <button id="onboarding-done" class="btn-primary">Got It</button>
+        </div>
+      </div>
+
+      <!-- Leaderboard overlay -->
+      <div id="leaderboard-overlay" class="overlay hidden">
+        <div class="leaderboard-container">
+          <h2>Global Leaderboard</h2>
+          <div id="leaderboard-content" class="leaderboard-content"></div>
+          <button id="leaderboard-close" class="btn-secondary">Close</button>
+        </div>
+      </div>
+
+      <!-- Game screen -->
+      <div id="game-screen" class="game-screen hidden">
+        <header class="game-header">
+          <div id="trophy-icon" class="trophy-icon"></div>
+          <div id="logo-wordmark" class="logo-wordmark"></div>
+          <div id="timer-display" class="timer-display">
+            <svg class="timer-ring" viewBox="0 0 100 100">
+              <circle
+                class="timer-ring-bg"
+                cx="50"
+                cy="50"
+                r="45"
+                fill="none"
+                stroke="#2F2F2F"
+                stroke-width="4"
+              />
+              <circle
+                id="timer-ring-progress"
+                class="timer-ring-progress"
+                cx="50"
+                cy="50"
+                r="45"
+                fill="none"
+                stroke="#FFBF00"
+                stroke-width="4"
+                stroke-dasharray="282.743"
+                stroke-dashoffset="0"
+                transform="rotate(-90 50 50)"
+              />
+            </svg>
+            <div id="timer-number" class="timer-number">0</div>
+          </div>
+        </header>
+
+        <div class="game-content">
+          <div id="stack-pane" class="stack-pane"></div>
+
+          <div id="grid-container" class="grid-container"></div>
+
+          <div id="game-over-screen" class="game-over-screen hidden">
+            <div class="game-over-title">GAME OVER</div>
+            <div id="final-score" class="final-score">0</div>
+            <button id="play-again" class="btn-primary">Play Again</button>
+            <div id="come-back-message" class="come-back-message hidden">
+              Come back tomorrow for a new game
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
