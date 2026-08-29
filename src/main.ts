@@ -4,6 +4,8 @@ import { api } from "../convex/_generated/api";
 
 const TOKEN_KEY = "staaaaack-session";
 const CIRC = 2 * Math.PI * 15.5;
+const START_BUDGET_MS = 30_000;
+const INCREMENT_MS = 1_000;
 
 const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined;
 if (!convexUrl) {
@@ -61,28 +63,8 @@ function unused(): string[] {
   return words.filter((w) => !set.has(w));
 }
 
-function nextRebuildLen(): number {
-  const remain = words.length - stack.length;
-  const add = remain >= 2 ? 2 : remain;
-  return stack.length + add;
-}
-
-function climbTimerMs(rebuildLen: number): number {
-  if (rebuildLen <= 5) return 12_000;
-  if (rebuildLen <= 10) return 18_000;
-  return 24_000;
-}
-
 function memorizeDwellMs(): number {
   return 5000 + 1000 * Math.max(0, stack.length - 2);
-}
-
-function enduranceTimerMs(pass: number): number {
-  if (pass === 0) return 24_000;
-  if (pass === 1) return 18_000;
-  if (pass === 2) return 13_000;
-  if (pass === 3) return 10_000;
-  return 8_000;
 }
 
 function shuffle<T>(arr: T[]): T[] {
@@ -235,10 +217,10 @@ function setTimerIdle(): void {
   timerEl.setAttribute("aria-hidden", "true");
 }
 
-function setTimerRun(left: number, duration: number): void {
+function setTimerRun(left: number): void {
   timerEl.className = "run";
-  timerNum.textContent = String(Math.max(1, Math.ceil(left / 1000)));
-  const p = Math.max(0, Math.min(1, left / duration));
+  timerNum.textContent = String(Math.max(0, Math.ceil(left / 1000)));
+  const p = Math.max(0, Math.min(1, left / START_BUDGET_MS));
   ringSolid.style.strokeDashoffset = String(CIRC * (1 - p));
   timerEl.removeAttribute("aria-hidden");
 }
@@ -250,30 +232,40 @@ function cancelMem(): void {
   mem.raf = 0;
 }
 
-function startCountdown(duration: number, onDone: () => void): void {
-  mem.onDone = onDone;
-  mem.duration = duration;
-  mem.left = duration;
+function startBudget(): void {
+  if (mem.running) return;
+  mem.onDone = () => {
+    void gameOver();
+  };
+  mem.duration = START_BUDGET_MS;
+  mem.left = START_BUDGET_MS;
   mem.running = true;
   mem.paused = false;
   mem.started = performance.now();
   mem.lastSec = Math.ceil(mem.left / 1000);
-  setTimerRun(mem.left, mem.duration);
+  setTimerRun(mem.left);
   beep(false);
   loopMem();
 }
 
+function grantIncrement(): void {
+  if (!mem.running || phase === "over") return;
+  mem.left += INCREMENT_MS;
+  mem.lastSec = Math.ceil(mem.left / 1000);
+  setTimerRun(mem.left);
+}
+
 function loopMem(): void {
   if (!mem.running) return;
+  let last = performance.now();
   const step = (now: number) => {
     if (!mem.running) return;
-    if (mem.paused) {
-      mem.raf = requestAnimationFrame(step);
-      return;
+    const dt = now - last;
+    last = now;
+    if (!mem.paused) {
+      mem.left = Math.max(0, mem.left - dt);
     }
-    const elapsed = now - mem.started;
-    mem.left = Math.max(0, mem.duration - elapsed);
-    setTimerRun(mem.left, mem.duration);
+    setTimerRun(mem.left);
     const sec = Math.ceil(mem.left / 1000);
     if (sec < mem.lastSec && mem.left > 0) {
       mem.lastSec = sec;
@@ -295,13 +287,11 @@ function loopMem(): void {
 function pauseMem(): void {
   if (!mem.running || mem.paused) return;
   mem.paused = true;
-  mem.left = Math.max(0, mem.duration - (performance.now() - mem.started));
 }
 
 function resumeMem(): void {
   if (!mem.running || !mem.paused) return;
   mem.paused = false;
-  mem.started = performance.now() - (mem.duration - mem.left);
   mem.lastSec = Math.ceil(mem.left / 1000);
 }
 
@@ -311,9 +301,7 @@ function startAdd(): void {
   paintTiles();
   renderStack();
   busy = false;
-  startCountdown(climbTimerMs(nextRebuildLen()), () => {
-    void gameOver();
-  });
+  startBudget();
 }
 
 async function startMemorize(): Promise<void> {
@@ -342,9 +330,6 @@ async function startEnduranceRound(): Promise<void> {
   phase = "stack";
   rebuildAt = 0;
   busy = true;
-  startCountdown(enduranceTimerMs(endurancePass), () => {
-    void gameOver();
-  });
   renderStack();
   paintTiles();
   await flipShuffle();
@@ -364,6 +349,7 @@ async function onTap(word: string): Promise<void> {
     if (stack.includes(word)) return;
     busy = true;
     stack.push(word);
+    grantIncrement();
     paintTiles();
     renderStack();
     const left = unused();
@@ -386,6 +372,7 @@ async function onTap(word: string): Promise<void> {
       return;
     }
     rebuildAt += 1;
+    grantIncrement();
     paintTiles();
     renderStack();
     if (rebuildAt === stack.length) {
@@ -402,8 +389,6 @@ async function onTap(word: string): Promise<void> {
         score *= 2;
         endurancePass += 1;
       }
-      mem.onDone = null;
-      cancelMem();
       await startEnduranceRound();
     }
   }

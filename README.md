@@ -43,7 +43,7 @@ Or upload `dist` in the Cloudflare dashboard. Set `VITE_CONVEX_URL` in the Pages
 - Claim a handle (3–16 `a-zA-Z0-9_`) and a passphrase (6+). New browser: sign in again.
 - First session shows the rules once.
 - Today’s 15 words come from the server. Lists loop after day 99.
-- Add and rebuild share one clock. No memorize gap.
-- Climb timers: 12s / 18s / 24s by rebuild length. After 15, the same list loops and score doubles (15, 30, 60, …) with timers 24, 18, 13, 10, then 8s.
+- One 30s budget for the whole run. It ticks in every phase. Each correct word adds +1s.
+- After 15, the same list loops and score doubles (15, 30, 60, …).
 - One submitted run per player per UTC day. After that: See board / Back tomorrow.
 - Trophy is the global top 50 (handle, score, theme).
