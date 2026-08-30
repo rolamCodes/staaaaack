@@ -93,11 +93,12 @@ function tone(
   freq: number,
   when: number,
   gain: number,
-  dur: number
+  dur: number,
+  type: OscillatorType = "sine"
 ): void {
   const o = ctx.createOscillator();
   const g = ctx.createGain();
-  o.type = "sine";
+  o.type = type;
   o.frequency.value = freq;
   g.gain.setValueAtTime(gain, when);
   g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
@@ -122,6 +123,17 @@ function beepIncrement(): void {
     const t = ctx.currentTime;
     tone(ctx, 740, t, 0.08, 0.07);
     tone(ctx, 1175, t + 0.06, 0.09, 0.1);
+  } catch {
+    /* ignore autoplay / closed context */
+  }
+}
+
+function beepComputer(): void {
+  try {
+    const ctx = ensureAudio();
+    const t = ctx.currentTime;
+    tone(ctx, 349, t, 0.075, 0.16, "triangle");
+    tone(ctx, 262, t + 0.11, 0.08, 0.22, "triangle");
   } catch {
     /* ignore autoplay / closed context */
   }
@@ -380,6 +392,7 @@ async function onTap(word: string): Promise<void> {
       stack.push(pick);
       paintTiles();
       renderStack();
+      beepComputer();
     }
     if (phase !== "add") return;
     startMemorize();

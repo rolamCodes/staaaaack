@@ -91,6 +91,11 @@ header .logo {
 }
 #stack.memorize #stack-words {
   overflow: hidden;
+  animation: stack-ready-pulse 2.6s ease-in-out infinite;
+}
+@keyframes stack-ready-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.38; }
 }
 #stack .word {
   text-align: center;
