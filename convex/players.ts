@@ -144,25 +144,3 @@ export const completeOnboarding = mutation({
     return { success: true };
   },
 });
-
-export const signOut = mutation({
-  args: { sessionToken: v.string() },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const sessionTokenHash = await hashSessionToken(args.sessionToken);
-    const player = await ctx.db
-      .query("players")
-      .withIndex("by_session", (q) =>
-        q.eq("sessionTokenHash", sessionTokenHash)
-      )
-      .unique();
-
-    if (player) {
-      await ctx.db.patch(player._id, {
-        sessionTokenHash: `signed-out:${player._id}:${Date.now()}`,
-      });
-    }
-
-    return null;
-  },
-});

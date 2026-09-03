@@ -4,8 +4,8 @@ import { api } from "../convex/_generated/api";
 
 const TOKEN_KEY = "staaaaack-session";
 const CIRC = 2 * Math.PI * 15.5;
-const START_BUDGET_MS = 60_000;
-const INCREMENT_MS = 3_000;
+const START_BUDGET_MS = 30_000;
+const INCREMENT_MS = 1_000;
 const isPlaytest =
   window.location.pathname.replace(/\/+$/, "") === "/playtest";
 
@@ -18,25 +18,13 @@ const convex = new ConvexClient(convexUrl);
 const gridEl = document.getElementById("grid")!;
 const stackEl = document.getElementById("stack")!;
 const stackWordsEl = document.getElementById("stack-words")!;
+const hideBtn = document.getElementById("hide") as HTMLButtonElement;
 const timerEl = document.getElementById("timer")!;
 const timerNum = timerEl.querySelector(".num")!;
 const ringSolid = timerEl.querySelector(".ring-solid") as SVGCircleElement;
 const endEl = document.getElementById("end")!;
 const scoresEl = document.getElementById("scores")!;
-const menuButton = document.getElementById("menu-button") as HTMLButtonElement;
-const menuBackdrop = document.getElementById("menu-backdrop")!;
-const menuPopover = document.getElementById("menu-popover")!;
-const menuHandle = document.getElementById("menu-handle")!;
-const menuLeaderboard = document.getElementById(
-  "menu-leaderboard"
-) as HTMLButtonElement;
-const menuFeedback = document.getElementById(
-  "menu-feedback"
-) as HTMLAnchorElement;
-const menuSignout = document.getElementById(
-  "menu-signout"
-) as HTMLButtonElement;
-const gridSheetEl = document.getElementById("grid-sheet")!;
+const trophyBtn = document.getElementById("trophy")!;
 const againBtn = document.getElementById("again") as HTMLButtonElement;
 const seeBoardBtn = document.getElementById("see-board") as HTMLButtonElement;
 const tomorrowEl = document.getElementById("tomorrow")!;
@@ -51,14 +39,8 @@ const gateError = document.getElementById("gate-error")!;
 const gateIn = document.getElementById("gate-in")!;
 const guideEl = document.getElementById("guide")!;
 const guideGo = document.getElementById("guide-go")!;
-const guideTrack = document.getElementById("guide-track")!;
-const guideViewport = document.getElementById("guide-viewport")!;
-const guideDots = [...document.querySelectorAll("#guide-dots button")];
-const GUIDE_STEPS = 4;
-let guideStep = 0;
 
 let sessionToken = localStorage.getItem(TOKEN_KEY);
-let currentHandle = "";
 let words: string[] = [];
 let tiles: HTMLButtonElement[] = [];
 let stack: string[] = [];
@@ -115,12 +97,11 @@ function tone(
   freq: number,
   when: number,
   gain: number,
-  dur: number,
-  type: OscillatorType = "sine"
+  dur: number
 ): void {
   const o = ctx.createOscillator();
   const g = ctx.createGain();
-  o.type = type;
+  o.type = "sine";
   o.frequency.value = freq;
   g.gain.setValueAtTime(gain, when);
   g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
@@ -150,19 +131,12 @@ function beepIncrement(): void {
   }
 }
 
-function beepComputer(): void {
-  try {
-    const ctx = ensureAudio();
-    const t = ctx.currentTime;
-    tone(ctx, 349, t, 0.075, 0.16, "triangle");
-    tone(ctx, 262, t + 0.11, 0.08, 0.22, "triangle");
-  } catch {
-    /* ignore autoplay / closed context */
-  }
-}
-
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function setHideControl(on: boolean): void {
+  hideBtn.hidden = !on;
 }
 
 function makeTiles(list: string[]): void {
@@ -342,9 +316,7 @@ function resumeMem(): void {
 function startAdd(): void {
   phase = "add";
   rebuildAt = 0;
-  stackEl.classList.remove("memorize");
-  gridSheetEl.classList.remove("pullable", "dragging");
-  resetSheetPosition();
+  setHideControl(false);
   paintTiles();
   renderStack();
   busy = false;
@@ -354,22 +326,18 @@ function startAdd(): void {
 function startMemorize(): void {
   phase = "memorize";
   busy = true;
-  stackEl.classList.add("memorize");
-  gridSheetEl.classList.add("pullable");
   paintTiles();
   renderStack();
+  setHideControl(true);
 }
 
 async function finishMemorize(): Promise<void> {
   if (phase !== "memorize") return;
   phase = "stack";
-  gridSheetEl.classList.remove("pullable", "dragging");
-  gridSheetEl.style.transition = "transform 380ms cubic-bezier(.2,.7,.2,1)";
-  gridSheetEl.style.transform = "translateY(-96px)";
   stackEl.classList.add("hiding");
   await sleep(380);
-  stackEl.classList.remove("hiding", "memorize");
-  resetSheetPosition();
+  stackEl.classList.remove("hiding");
+  setHideControl(false);
   if (endEl.classList.contains("show")) return;
   await startRebuild();
 }
@@ -378,9 +346,7 @@ async function startRebuild(): Promise<void> {
   phase = "stack";
   rebuildAt = 0;
   busy = true;
-  stackEl.classList.remove("memorize");
-  gridSheetEl.classList.remove("pullable", "dragging");
-  resetSheetPosition();
+  setHideControl(false);
   renderStack();
   paintTiles();
   await flipShuffle();
@@ -423,7 +389,6 @@ async function onTap(word: string): Promise<void> {
       stack.push(pick);
       paintTiles();
       renderStack();
-      beepComputer();
     }
     if (phase !== "add") return;
     startMemorize();
@@ -463,9 +428,7 @@ async function gameOver(): Promise<void> {
   cancelMem();
   setTimerIdle();
   phase = "over";
-  stackEl.classList.remove("memorize");
-  gridSheetEl.classList.remove("pullable", "dragging");
-  resetSheetPosition();
+  setHideControl(false);
   paintTiles();
   renderStack();
   document.getElementById("end-title")!.textContent = "GAME OVER";
@@ -501,7 +464,6 @@ function showPlayableEnd(): void {
 
 async function openScores(e: Event): Promise<void> {
   e.stopPropagation();
-  closeMenu(false);
   const open = scoresEl.classList.contains("show");
   if (open) {
     scoresEl.classList.remove("show");
@@ -577,24 +539,11 @@ async function afterAuth(): Promise<void> {
     gateEl.classList.add("show");
     return;
   }
-  currentHandle = me.handle;
-  menuHandle.textContent = `@${me.handle}`;
   if (!me.onboarded) {
-    await loadToday();
-    showGuide(0);
+    guideEl.classList.add("show");
     return;
   }
   await boot(isPlaytest ? false : me.todaySubmitted, me.todayScore);
-}
-
-function showGuide(step: number): void {
-  guideStep = Math.max(0, Math.min(GUIDE_STEPS - 1, step));
-  guideTrack.style.transform = `translateX(-${guideStep * 100}%)`;
-  guideDots.forEach((dot, i) => {
-    dot.classList.toggle("on", i === guideStep);
-  });
-  guideGo.textContent = guideStep === GUIDE_STEPS - 1 ? "Play" : "Next";
-  guideEl.classList.add("show");
 }
 
 async function finishGuide(): Promise<void> {
@@ -604,28 +553,24 @@ async function finishGuide(): Promise<void> {
   await boot(false);
 }
 
-async function loadToday(): Promise<void> {
+async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<void> {
   cancelMem();
   setTimerIdle();
+  endEl.classList.remove("show");
+  scoresEl.classList.remove("show");
   stack = [];
   rebuildAt = 0;
   score = 0;
   endurance = false;
   endurancePass = 0;
   phase = "add";
+  submittedToday = isPlaytest ? false : alreadySubmitted;
+
   const today = await convex.query(api.game.getToday, {});
   words = today.words.slice();
   makeTiles(words);
   paintTiles();
   renderStack();
-}
-
-async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<void> {
-  endEl.classList.remove("show");
-  scoresEl.classList.remove("show");
-  closeMenu(false);
-  submittedToday = isPlaytest ? false : alreadySubmitted;
-  await loadToday();
 
   if (alreadySubmitted) {
     document.getElementById("end-title")!.textContent = "GAME OVER";
@@ -639,116 +584,30 @@ async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<voi
   startAdd();
 }
 
-let sheetDragY: number | null = null;
-let sheetPointerId: number | null = null;
-let sheetTriggered = false;
+let swipeY: number | null = null;
+let swipeAt = 0;
 
-function resetSheetPosition(): void {
-  gridSheetEl.style.transition = "";
-  gridSheetEl.style.transform = "";
-}
-
-function moveSheet(clientY: number): void {
-  if (sheetDragY == null || phase !== "memorize" || sheetTriggered) return;
-  const distance = Math.max(0, Math.min(112, sheetDragY - clientY));
-  gridSheetEl.style.transform = `translateY(-${distance}px)`;
-  stackWordsEl.style.opacity = String(Math.max(0.12, 1 - distance / 104));
-  if (distance >= 72) {
-    sheetTriggered = true;
-    sheetDragY = null;
-    stackWordsEl.style.opacity = "";
-    void finishMemorize();
-  }
-}
-
-gridSheetEl.addEventListener("pointerdown", (e) => {
+stackEl.addEventListener("pointerdown", (e) => {
   if (phase !== "memorize") return;
-  e.preventDefault();
-  gridSheetEl.setPointerCapture(e.pointerId);
-  gridSheetEl.classList.add("dragging");
-  sheetDragY = e.clientY;
-  sheetPointerId = e.pointerId;
-  sheetTriggered = false;
+  swipeY = e.clientY;
+  swipeAt = performance.now();
 });
-gridSheetEl.addEventListener("pointermove", (e) => {
-  if (sheetPointerId !== e.pointerId) return;
-  moveSheet(e.clientY);
-});
-function endSheetDrag(e: PointerEvent): void {
-  if (sheetPointerId !== e.pointerId) return;
-  moveSheet(e.clientY);
-  sheetDragY = null;
-  sheetPointerId = null;
-  gridSheetEl.classList.remove("dragging");
-  if (!sheetTriggered) {
-    gridSheetEl.style.transition = "transform 220ms ease";
-    gridSheetEl.style.transform = "";
-    window.setTimeout(() => {
-      if (phase === "memorize") gridSheetEl.style.transition = "";
-    }, 220);
-  }
-  sheetTriggered = false;
-}
-window.addEventListener("pointerup", endSheetDrag);
-window.addEventListener("pointercancel", endSheetDrag);
-
-function openMenu(): void {
-  if (!sessionToken || menuButton.getAttribute("aria-expanded") === "true") {
+window.addEventListener("pointerup", (e) => {
+  if (swipeY == null || phase !== "memorize") {
+    swipeY = null;
     return;
   }
-  pauseMem();
-  menuHandle.textContent = currentHandle ? `@${currentHandle}` : "@player";
-  menuBackdrop.hidden = false;
-  menuPopover.hidden = false;
-  menuButton.setAttribute("aria-expanded", "true");
-  menuButton.setAttribute("aria-label", "Close menu");
-}
-
-function closeMenu(shouldResume = true): void {
-  if (menuButton.getAttribute("aria-expanded") !== "true") return;
-  menuBackdrop.hidden = true;
-  menuPopover.hidden = true;
-  menuButton.setAttribute("aria-expanded", "false");
-  menuButton.setAttribute("aria-label", "Open menu");
-  if (shouldResume) resumeMem();
-}
-
-async function signOut(): Promise<void> {
-  const token = sessionToken;
-  closeMenu(false);
-  cancelMem();
-  setTimerIdle();
-  sessionToken = null;
-  currentHandle = "";
-  localStorage.removeItem(TOKEN_KEY);
-  endEl.classList.remove("show");
-  scoresEl.classList.remove("show");
-  guideEl.classList.remove("show");
-  gateEl.classList.add("show");
-  gatePass.value = "";
-  if (token) {
-    await convex.mutation(api.players.signOut, { sessionToken: token });
-  }
-}
-
-menuButton.addEventListener("click", () => {
-  if (menuButton.getAttribute("aria-expanded") === "true") {
-    closeMenu();
-  } else {
-    openMenu();
-  }
+  const dy = swipeY - e.clientY;
+  const dt = performance.now() - swipeAt;
+  swipeY = null;
+  if (dy >= 64 && dt < 500) void finishMemorize();
 });
-menuBackdrop.addEventListener("click", () => {
-  closeMenu();
+hideBtn.addEventListener("click", () => {
+  void finishMemorize();
 });
-menuLeaderboard.addEventListener("click", (e) => {
+
+trophyBtn.addEventListener("click", (e) => {
   void openScores(e);
-});
-menuFeedback.addEventListener("click", () => {
-  closeMenu();
-});
-menuSignout.addEventListener("click", () => {
-  void signOut();
 });
 scoresEl.addEventListener("click", closeScores);
 againBtn.addEventListener("click", () => {
@@ -766,42 +625,7 @@ gateIn.addEventListener("click", () => {
   void submitAuth("signin");
 });
 guideGo.addEventListener("click", () => {
-  if (guideStep >= GUIDE_STEPS - 1) {
-    void finishGuide();
-    return;
-  }
-  showGuide(guideStep + 1);
-});
-guideDots.forEach((dot, i) => {
-  dot.addEventListener("click", () => {
-    showGuide(i);
-  });
-});
-
-window.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    if (menuButton.getAttribute("aria-expanded") === "true") {
-      closeMenu();
-    } else if (scoresEl.classList.contains("show")) {
-      scoresEl.classList.remove("show");
-      resumeMem();
-    }
-  }
-});
-
-let guideSwipeX: number | null = null;
-guideViewport.addEventListener("pointerdown", (e) => {
-  guideSwipeX = e.clientX;
-});
-window.addEventListener("pointerup", (e) => {
-  if (guideSwipeX == null || !guideEl.classList.contains("show")) {
-    guideSwipeX = null;
-    return;
-  }
-  const dx = e.clientX - guideSwipeX;
-  guideSwipeX = null;
-  if (dx <= -48) showGuide(guideStep + 1);
-  if (dx >= 48) showGuide(guideStep - 1);
+  void finishGuide();
 });
 
 if (sessionToken) {

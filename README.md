@@ -41,10 +41,10 @@ Or upload `dist` in the Cloudflare dashboard. Set `VITE_CONVEX_URL` in the Pages
 ## Play
 
 - Claim a handle (3–16 `a-zA-Z0-9_`) and a passphrase (6+). New browser: sign in again.
-- First session shows a 4-card onboarding (stack, clock, daily, endurance).
+- First session shows the rules once.
 - Today’s 15 words come from the server. Lists loop after day 99.
-- One 60s budget for the whole run. It ticks in every phase. Each correct word adds +3s.
-- After the computer adds, swipe up on the stack when you’ve memorized. Then rebuild.
+- One 30s budget for the whole run. It ticks in every phase. Each correct word adds +1s.
+- After the computer adds, swipe up (or tap swipe up to hide) when you’ve memorized. Then rebuild.
 - After 15, the same list loops and score doubles (15, 30, 60, …).
 - One submitted run per player per UTC day. After that: See board / Back tomorrow.
 - Trophy is the global top 50 (handle, score, theme).
