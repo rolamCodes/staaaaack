@@ -21,7 +21,20 @@ const timerNum = timerEl.querySelector(".num")!;
 const ringSolid = timerEl.querySelector(".ring-solid") as SVGCircleElement;
 const endEl = document.getElementById("end")!;
 const scoresEl = document.getElementById("scores")!;
-const trophyBtn = document.getElementById("trophy")!;
+const menuButton = document.getElementById("menu-button") as HTMLButtonElement;
+const menuBackdrop = document.getElementById("menu-backdrop")!;
+const menuPopover = document.getElementById("menu-popover")!;
+const menuHandle = document.getElementById("menu-handle")!;
+const menuLeaderboard = document.getElementById(
+  "menu-leaderboard"
+) as HTMLButtonElement;
+const menuFeedback = document.getElementById(
+  "menu-feedback"
+) as HTMLAnchorElement;
+const menuSignout = document.getElementById(
+  "menu-signout"
+) as HTMLButtonElement;
+const gridSheetEl = document.getElementById("grid-sheet")!;
 const againBtn = document.getElementById("again") as HTMLButtonElement;
 const seeBoardBtn = document.getElementById("see-board") as HTMLButtonElement;
 const tomorrowEl = document.getElementById("tomorrow")!;
@@ -42,6 +55,7 @@ const GUIDE_STEPS = 4;
 let guideStep = 0;
 
 let sessionToken = localStorage.getItem(TOKEN_KEY);
+let currentHandle = "";
 let words: string[] = [];
 let tiles: HTMLButtonElement[] = [];
 let stack: string[] = [];
@@ -321,6 +335,8 @@ function startAdd(): void {
   phase = "add";
   rebuildAt = 0;
   stackEl.classList.remove("memorize");
+  gridSheetEl.classList.remove("pullable", "dragging");
+  resetSheetPosition();
   paintTiles();
   renderStack();
   busy = false;
@@ -331,6 +347,7 @@ function startMemorize(): void {
   phase = "memorize";
   busy = true;
   stackEl.classList.add("memorize");
+  gridSheetEl.classList.add("pullable");
   paintTiles();
   renderStack();
 }
@@ -338,9 +355,13 @@ function startMemorize(): void {
 async function finishMemorize(): Promise<void> {
   if (phase !== "memorize") return;
   phase = "stack";
+  gridSheetEl.classList.remove("pullable", "dragging");
+  gridSheetEl.style.transition = "transform 380ms cubic-bezier(.2,.7,.2,1)";
+  gridSheetEl.style.transform = "translateY(-96px)";
   stackEl.classList.add("hiding");
   await sleep(380);
   stackEl.classList.remove("hiding", "memorize");
+  resetSheetPosition();
   if (endEl.classList.contains("show")) return;
   await startRebuild();
 }
@@ -350,6 +371,8 @@ async function startRebuild(): Promise<void> {
   rebuildAt = 0;
   busy = true;
   stackEl.classList.remove("memorize");
+  gridSheetEl.classList.remove("pullable", "dragging");
+  resetSheetPosition();
   renderStack();
   paintTiles();
   await flipShuffle();
@@ -433,6 +456,8 @@ async function gameOver(): Promise<void> {
   setTimerIdle();
   phase = "over";
   stackEl.classList.remove("memorize");
+  gridSheetEl.classList.remove("pullable", "dragging");
+  resetSheetPosition();
   paintTiles();
   renderStack();
   document.getElementById("end-title")!.textContent = "GAME OVER";
@@ -464,6 +489,7 @@ function showPlayableEnd(): void {
 
 async function openScores(e: Event): Promise<void> {
   e.stopPropagation();
+  closeMenu(false);
   const open = scoresEl.classList.contains("show");
   if (open) {
     scoresEl.classList.remove("show");
@@ -539,6 +565,8 @@ async function afterAuth(): Promise<void> {
     gateEl.classList.add("show");
     return;
   }
+  currentHandle = me.handle;
+  menuHandle.textContent = `@${me.handle}`;
   if (!me.onboarded) {
     await loadToday();
     showGuide(0);
@@ -583,6 +611,7 @@ async function loadToday(): Promise<void> {
 async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<void> {
   endEl.classList.remove("show");
   scoresEl.classList.remove("show");
+  closeMenu(false);
   submittedToday = alreadySubmitted;
   await loadToday();
 
@@ -598,44 +627,116 @@ async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<voi
   startAdd();
 }
 
-let swipeY: number | null = null;
-let swipeAt = 0;
-let swipeFired = false;
+let sheetDragY: number | null = null;
+let sheetPointerId: number | null = null;
+let sheetTriggered = false;
 
-function maybeSwipeHide(clientY: number): void {
-  if (swipeY == null || phase !== "memorize" || swipeFired) return;
-  const dy = swipeY - clientY;
-  const dt = performance.now() - swipeAt;
-  if (dy >= 56 && dt < 700) {
-    swipeFired = true;
-    swipeY = null;
+function resetSheetPosition(): void {
+  gridSheetEl.style.transition = "";
+  gridSheetEl.style.transform = "";
+}
+
+function moveSheet(clientY: number): void {
+  if (sheetDragY == null || phase !== "memorize" || sheetTriggered) return;
+  const distance = Math.max(0, Math.min(112, sheetDragY - clientY));
+  gridSheetEl.style.transform = `translateY(-${distance}px)`;
+  stackWordsEl.style.opacity = String(Math.max(0.12, 1 - distance / 104));
+  if (distance >= 72) {
+    sheetTriggered = true;
+    sheetDragY = null;
+    stackWordsEl.style.opacity = "";
     void finishMemorize();
   }
 }
 
-stackEl.addEventListener("pointerdown", (e) => {
+gridSheetEl.addEventListener("pointerdown", (e) => {
   if (phase !== "memorize") return;
   e.preventDefault();
-  stackEl.setPointerCapture(e.pointerId);
-  swipeY = e.clientY;
-  swipeAt = performance.now();
-  swipeFired = false;
+  gridSheetEl.setPointerCapture(e.pointerId);
+  gridSheetEl.classList.add("dragging");
+  sheetDragY = e.clientY;
+  sheetPointerId = e.pointerId;
+  sheetTriggered = false;
 });
-stackEl.addEventListener("pointermove", (e) => {
-  maybeSwipeHide(e.clientY);
+gridSheetEl.addEventListener("pointermove", (e) => {
+  if (sheetPointerId !== e.pointerId) return;
+  moveSheet(e.clientY);
 });
-window.addEventListener("pointerup", (e) => {
-  maybeSwipeHide(e.clientY);
-  swipeY = null;
-  swipeFired = false;
-});
-window.addEventListener("pointercancel", () => {
-  swipeY = null;
-  swipeFired = false;
-});
+function endSheetDrag(e: PointerEvent): void {
+  if (sheetPointerId !== e.pointerId) return;
+  moveSheet(e.clientY);
+  sheetDragY = null;
+  sheetPointerId = null;
+  gridSheetEl.classList.remove("dragging");
+  if (!sheetTriggered) {
+    gridSheetEl.style.transition = "transform 220ms ease";
+    gridSheetEl.style.transform = "";
+    window.setTimeout(() => {
+      if (phase === "memorize") gridSheetEl.style.transition = "";
+    }, 220);
+  }
+  sheetTriggered = false;
+}
+window.addEventListener("pointerup", endSheetDrag);
+window.addEventListener("pointercancel", endSheetDrag);
 
-trophyBtn.addEventListener("click", (e) => {
+function openMenu(): void {
+  if (!sessionToken || menuButton.getAttribute("aria-expanded") === "true") {
+    return;
+  }
+  pauseMem();
+  menuHandle.textContent = currentHandle ? `@${currentHandle}` : "@player";
+  menuBackdrop.hidden = false;
+  menuPopover.hidden = false;
+  menuButton.setAttribute("aria-expanded", "true");
+  menuButton.setAttribute("aria-label", "Close menu");
+}
+
+function closeMenu(shouldResume = true): void {
+  if (menuButton.getAttribute("aria-expanded") !== "true") return;
+  menuBackdrop.hidden = true;
+  menuPopover.hidden = true;
+  menuButton.setAttribute("aria-expanded", "false");
+  menuButton.setAttribute("aria-label", "Open menu");
+  if (shouldResume) resumeMem();
+}
+
+async function signOut(): Promise<void> {
+  const token = sessionToken;
+  closeMenu(false);
+  cancelMem();
+  setTimerIdle();
+  sessionToken = null;
+  currentHandle = "";
+  localStorage.removeItem(TOKEN_KEY);
+  endEl.classList.remove("show");
+  scoresEl.classList.remove("show");
+  guideEl.classList.remove("show");
+  gateEl.classList.add("show");
+  gatePass.value = "";
+  if (token) {
+    await convex.mutation(api.players.signOut, { sessionToken: token });
+  }
+}
+
+menuButton.addEventListener("click", () => {
+  if (menuButton.getAttribute("aria-expanded") === "true") {
+    closeMenu();
+  } else {
+    openMenu();
+  }
+});
+menuBackdrop.addEventListener("click", () => {
+  closeMenu();
+});
+menuLeaderboard.addEventListener("click", (e) => {
   void openScores(e);
+});
+menuFeedback.addEventListener("click", () => {
+  closeMenu();
+});
+menuSignout.addEventListener("click", () => {
+  void signOut();
 });
 scoresEl.addEventListener("click", closeScores);
 againBtn.addEventListener("click", () => {
@@ -663,6 +764,17 @@ guideDots.forEach((dot, i) => {
   dot.addEventListener("click", () => {
     showGuide(i);
   });
+});
+
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    if (menuButton.getAttribute("aria-expanded") === "true") {
+      closeMenu();
+    } else if (scoresEl.classList.contains("show")) {
+      scoresEl.classList.remove("show");
+      resumeMem();
+    }
+  }
 });
 
 let guideSwipeX: number | null = null;
