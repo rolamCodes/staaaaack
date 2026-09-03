@@ -6,6 +6,8 @@ const TOKEN_KEY = "staaaaack-session";
 const CIRC = 2 * Math.PI * 15.5;
 const START_BUDGET_MS = 60_000;
 const INCREMENT_MS = 3_000;
+const isPlaytest =
+  window.location.pathname.replace(/\/+$/, "") === "/playtest";
 
 const convexUrl = import.meta.env.VITE_CONVEX_URL as string | undefined;
 if (!convexUrl) {
@@ -38,6 +40,7 @@ const gridSheetEl = document.getElementById("grid-sheet")!;
 const againBtn = document.getElementById("again") as HTMLButtonElement;
 const seeBoardBtn = document.getElementById("see-board") as HTMLButtonElement;
 const tomorrowEl = document.getElementById("tomorrow")!;
+const playtestNoteEl = document.getElementById("playtest-note")!;
 const boardRows = document.getElementById("board-rows")!;
 const boardEmpty = document.getElementById("board-empty")!;
 const gateEl = document.getElementById("gate")!;
@@ -67,6 +70,11 @@ let endurance = false;
 let endurancePass = 0;
 let submittedToday = false;
 let audio: AudioContext | undefined;
+
+if (isPlaytest) {
+  document.title = "staaaaack · playtest";
+  playtestNoteEl.hidden = false;
+}
 const mem = {
   duration: 0,
   left: 0,
@@ -464,7 +472,7 @@ async function gameOver(): Promise<void> {
   document.getElementById("end-score")!.textContent = String(score);
   endEl.classList.add("show");
 
-  if (sessionToken && !submittedToday) {
+  if (!isPlaytest && sessionToken && !submittedToday) {
     submittedToday = true;
     await convex.mutation(api.game.submitRun, {
       sessionToken,
@@ -472,7 +480,11 @@ async function gameOver(): Promise<void> {
     });
   }
 
-  showConsumedEnd();
+  if (isPlaytest) {
+    showPlayableEnd();
+  } else {
+    showConsumedEnd();
+  }
 }
 
 function showConsumedEnd(): void {
@@ -572,7 +584,7 @@ async function afterAuth(): Promise<void> {
     showGuide(0);
     return;
   }
-  await boot(me.todaySubmitted, me.todayScore);
+  await boot(isPlaytest ? false : me.todaySubmitted, me.todayScore);
 }
 
 function showGuide(step: number): void {
@@ -612,7 +624,7 @@ async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<voi
   endEl.classList.remove("show");
   scoresEl.classList.remove("show");
   closeMenu(false);
-  submittedToday = alreadySubmitted;
+  submittedToday = isPlaytest ? false : alreadySubmitted;
   await loadToday();
 
   if (alreadySubmitted) {
@@ -740,7 +752,7 @@ menuSignout.addEventListener("click", () => {
 });
 scoresEl.addEventListener("click", closeScores);
 againBtn.addEventListener("click", () => {
-  if (submittedToday) return;
+  if (submittedToday && !isPlaytest) return;
   void boot(false);
 });
 seeBoardBtn.addEventListener("click", (e) => {
