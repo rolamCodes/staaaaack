@@ -12,6 +12,7 @@ import type * as auth from "../auth.js";
 import type * as game from "../game.js";
 import type * as lib_session from "../lib/session.js";
 import type * as lists from "../lists.js";
+import type * as matches from "../matches.js";
 import type * as players from "../players.js";
 
 import type {
@@ -25,6 +26,7 @@ declare const fullApi: ApiFromModules<{
   game: typeof game;
   "lib/session": typeof lib_session;
   lists: typeof lists;
+  matches: typeof matches;
   players: typeof players;
 }>;
 

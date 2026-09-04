@@ -246,13 +246,13 @@ header .logo {
   flex-shrink: 0;
   display: block;
 }
-#end, #scores, #gate, #guide {
+#end, #scores, #gate, #guide, #daily, #wait {
   position: absolute;
   inset: 0;
   z-index: 4;
   display: none;
 }
-#end.show, #scores.show, #gate.show, #guide.show { display: grid; }
+#end.show, #scores.show, #gate.show, #guide.show, #daily.show, #wait.show { display: grid; }
 #end {
   background: var(--bg);
   place-items: center;
@@ -274,7 +274,7 @@ header .logo {
   color: var(--yellow);
   letter-spacing: -0.04em;
 }
-#again, #see-board, #gate-claim, #guide-go {
+#again, #see-board, #gate-claim, #guide-go, #daily-pvc, #wait-copy {
   background: var(--yellow);
   color: #000;
   border: 0;
@@ -291,13 +291,13 @@ header .logo {
   font-size: 16px;
   font-weight: 600;
 }
-#playtest-note {
+#playtest-note, #pvp-note {
   margin: 18px 0 0;
   color: var(--muted-text);
   font-size: 14px;
   font-weight: 600;
 }
-#tomorrow[hidden], #playtest-note[hidden], #see-board[hidden], #again[hidden] { display: none; }
+#tomorrow[hidden], #playtest-note[hidden], #pvp-note[hidden], #see-board[hidden], #again[hidden] { display: none; }
 #scores {
   background: transparent;
   place-items: start center;
@@ -390,6 +390,12 @@ header .logo {
   cursor: pointer;
 }
 #guide {
+  z-index: 7;
+  background: transparent;
+  place-items: center;
+  padding: 20px;
+}
+#daily, #wait {
   z-index: 6;
   background: transparent;
   place-items: center;
@@ -555,4 +561,33 @@ header .logo {
 #guide-go {
   width: auto;
   padding: 12px 28px;
+}
+.daily-date {
+  margin: 0;
+  color: var(--muted-text);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+#daily .guide-slide h2,
+#wait .guide-slide h2 {
+  margin-top: 12px;
+}
+.daily-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 28px;
+}
+#daily-pvc, #wait-copy {
+  width: 100%;
+}
+#daily-pvp {
+  background: none;
+  border: 0;
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+  padding: 8px;
+  cursor: pointer;
 }
