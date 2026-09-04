@@ -4,8 +4,8 @@ import { api } from "../convex/_generated/api";
 
 const TOKEN_KEY = "staaaaack-session";
 const CIRC = 2 * Math.PI * 15.5;
-const START_BUDGET_MS = 30_000;
-const INCREMENT_MS = 1_000;
+const START_BUDGET_MS = 60_000;
+const INCREMENT_MS = 3_000;
 const SHEET_PEEK = 44;
 const SHEET_PULL_THRESHOLD = 72;
 const isPlaytest =
