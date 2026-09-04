@@ -355,11 +355,16 @@ function startAdd(): void {
   startBudget();
 }
 
-function startMemorize(): void {
+async function startMemorize(): Promise<void> {
   phase = "memorize";
   busy = true;
   paintTiles();
   renderStack();
+  for (const b of tiles) {
+    b.classList.remove("on");
+  }
+  await flipShuffle();
+  if (endEl.classList.contains("show") || phase !== "memorize") return;
   collapseSheet();
 }
 
@@ -373,18 +378,14 @@ async function finishMemorize(): Promise<void> {
   gridSheetEl.style.transition = "";
   gridSheetEl.style.transform = "";
   if (endEl.classList.contains("show")) return;
-  await startRebuild();
+  startRebuild();
 }
 
-async function startRebuild(): Promise<void> {
+function startRebuild(): void {
   phase = "stack";
   rebuildAt = 0;
-  busy = true;
   expandSheet(false);
   renderStack();
-  paintTiles();
-  await flipShuffle();
-  if (endEl.classList.contains("show")) return;
   paintTiles();
   busy = false;
 }
@@ -425,7 +426,7 @@ async function onTap(word: string): Promise<void> {
       renderStack();
     }
     if (phase !== "add") return;
-    startMemorize();
+    await startMemorize();
     return;
   }
   if (phase === "stack") {
