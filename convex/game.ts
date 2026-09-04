@@ -72,6 +72,7 @@ export const leaderboard = query({
       handle: v.string(),
       score: v.number(),
       theme: v.string(),
+      finishedAt: v.number(),
     })
   ),
   handler: async (ctx) => {
@@ -87,6 +88,7 @@ export const leaderboard = query({
         handle: player.handle,
         score: run.score,
         theme: run.theme,
+        finishedAt: run.finishedAt,
       });
     }
     return rows;
