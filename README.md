@@ -41,6 +41,7 @@ Or upload `dist` in the Cloudflare dashboard. Set `VITE_CONVEX_URL` in the Pages
 ## Play
 
 - Claim a handle (3–16 `a-zA-Z0-9_`) and a passphrase (6+). New browser: sign in again.
+- First ranked play shows a five-slide how-to. Open it again from How to play in the hamburger. `/playtest` shows it on every load.
 - Today’s 15 words come from the server. Lists loop after day 99.
 - One 60s budget for the whole run. It ticks in every phase. Each correct word adds +3s.
 - After the computer adds, the word sheet collapses. Pull it back up when you’ve memorized, then rebuild.
