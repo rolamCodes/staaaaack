@@ -772,6 +772,7 @@ async function applyMatch(view: MatchView | null): Promise<void> {
   stack = view.stack.slice();
   const unlocked = seat ? matchUnlocked(view, seat) : false;
   const becameUnlocked = unlocked && !pvpWasUnlocked;
+  const becameLocked = !unlocked && pvpWasUnlocked;
   pvpWasUnlocked = unlocked;
 
   const samePrefix =
@@ -795,10 +796,25 @@ async function applyMatch(view: MatchView | null): Promise<void> {
     pvpMemorize = false;
     phase = "memorize";
     rebuildAt = 0;
-    collapseSheet();
     paintTiles();
     renderStack();
     busy = true;
+    if (becameLocked) {
+      resetStackMotion();
+      stackEl.classList.add("is-memorize");
+      for (const b of tiles) {
+        b.classList.remove("on");
+      }
+      await flipShuffle();
+      if (
+        matchView !== view ||
+        phase !== "memorize" ||
+        endEl.classList.contains("show")
+      ) {
+        return;
+      }
+    }
+    collapseSheet();
     return;
   }
 
