@@ -8,6 +8,7 @@ const START_BUDGET_MS = 60_000;
 const INCREMENT_MS = 3_000;
 const SHEET_PEEK = 44;
 const SHEET_PULL_THRESHOLD = 72;
+const WORD_DROP_MS = 340;
 const isPlaytest =
   window.location.pathname.replace(/\/+$/, "") === "/playtest";
 
@@ -19,6 +20,7 @@ const convex = new ConvexClient(convexUrl);
 
 const gridEl = document.getElementById("grid")!;
 const gridSheetEl = document.getElementById("grid-sheet")!;
+const stackEl = document.getElementById("stack")!;
 const stackWordsEl = document.getElementById("stack-words")!;
 const timerEl = document.getElementById("timer")!;
 const timerNum = timerEl.querySelector(".num")!;
@@ -209,14 +211,23 @@ function paintTiles(): void {
   }
 }
 
+function stackShown(): string[] {
+  if (phase === "stack") return stack.slice(0, rebuildAt).slice().reverse();
+  if (phase === "over") return [];
+  return stack.slice().reverse();
+}
+
 function renderStack(): void {
+  const shown = stackShown();
+  const existing = [...stackWordsEl.children].map((el) => el.textContent ?? "");
+  if (
+    shown.length === existing.length &&
+    shown.every((w, i) => w === existing[i])
+  ) {
+    stackWordsEl.scrollTop = 0;
+    return;
+  }
   stackWordsEl.innerHTML = "";
-  const shown =
-    phase === "stack"
-      ? stack.slice(0, rebuildAt).slice().reverse()
-      : phase === "over"
-        ? []
-        : stack.slice().reverse();
   for (const w of shown) {
     const d = document.createElement("div");
     d.className = "word";
@@ -224,6 +235,64 @@ function renderStack(): void {
     stackWordsEl.appendChild(d);
   }
   stackWordsEl.scrollTop = 0;
+}
+
+async function dropWordOntoStack(word: string): Promise<void> {
+  const others = [
+    ...stackWordsEl.querySelectorAll<HTMLElement>(":scope > .word"),
+  ];
+  const firstRects = others.map((el) => el.getBoundingClientRect());
+  const prevOverflow = stackWordsEl.style.overflow;
+  stackWordsEl.style.overflow = "visible";
+
+  const d = document.createElement("div");
+  d.className = "word drop-in";
+  d.textContent = word;
+  stackWordsEl.prepend(d);
+
+  others.forEach((el, i) => {
+    const dy = firstRects[i]!.top - el.getBoundingClientRect().top;
+    if (!dy) return;
+    el.style.transition = "none";
+    el.style.transform = `translateY(${dy}px)`;
+  });
+  void stackWordsEl.offsetHeight;
+  others.forEach((el) => {
+    el.style.transition = `transform ${WORD_DROP_MS}ms cubic-bezier(.2,.7,.2,1)`;
+    el.style.transform = "none";
+  });
+  stackWordsEl.scrollTop = 0;
+  await sleep(WORD_DROP_MS);
+  others.forEach((el) => {
+    el.style.transition = "";
+    el.style.transform = "";
+  });
+  d.classList.remove("drop-in");
+  stackWordsEl.style.overflow = prevOverflow;
+}
+
+function applyStackDismiss(progress: number, animated: boolean): void {
+  stackEl.classList.remove("is-memorize");
+  const p = Math.max(0, Math.min(1, progress));
+  stackEl.style.transition = animated
+    ? "transform 320ms cubic-bezier(.2,.7,.2,1), opacity 260ms ease"
+    : "none";
+  if (p <= 0) {
+    stackEl.style.transform = "translateY(0)";
+    stackEl.style.opacity = "1";
+    return;
+  }
+  stackEl.style.transform = `translateY(${-(p * 110)}%)`;
+  stackEl.style.opacity = String(1 - p);
+}
+
+function resetStackMotion(): void {
+  stackEl.classList.remove("is-memorize");
+  stackEl.style.transition = "none";
+  stackEl.style.transform = "";
+  stackEl.style.opacity = "";
+  void stackEl.offsetHeight;
+  stackEl.style.transition = "";
 }
 
 function flipShuffle(): Promise<void> {
@@ -348,6 +417,7 @@ function resumeMem(): void {
 function startAdd(): void {
   phase = "add";
   rebuildAt = 0;
+  resetStackMotion();
   expandSheet(false);
   paintTiles();
   renderStack();
@@ -359,7 +429,8 @@ async function startMemorize(): Promise<void> {
   phase = "memorize";
   busy = true;
   paintTiles();
-  renderStack();
+  resetStackMotion();
+  stackEl.classList.add("is-memorize");
   for (const b of tiles) {
     b.classList.remove("on");
   }
@@ -371,12 +442,14 @@ async function startMemorize(): Promise<void> {
 async function finishMemorize(): Promise<void> {
   if (phase !== "memorize") return;
   phase = "stack";
+  applyStackDismiss(1, true);
   gridSheetEl.classList.remove("collapsed", "pullable", "dragging");
   gridSheetEl.style.transition = "transform 320ms cubic-bezier(.2,.7,.2,1)";
   gridSheetEl.style.transform = "translateY(0)";
   await sleep(320);
   gridSheetEl.style.transition = "";
   gridSheetEl.style.transform = "";
+  stackWordsEl.innerHTML = "";
   if (endEl.classList.contains("show")) return;
   startRebuild();
 }
@@ -386,6 +459,7 @@ function startRebuild(): void {
   rebuildAt = 0;
   expandSheet(false);
   renderStack();
+  resetStackMotion();
   paintTiles();
   busy = false;
 }
@@ -396,6 +470,7 @@ async function startEnduranceRound(): Promise<void> {
   busy = true;
   expandSheet(false);
   renderStack();
+  resetStackMotion();
   paintTiles();
   await flipShuffle();
   if (endEl.classList.contains("show")) return;
@@ -415,17 +490,27 @@ async function onTap(word: string): Promise<void> {
     stack.push(word);
     grantIncrement();
     paintTiles();
-    renderStack();
+    await dropWordOntoStack(word);
+    if (phase !== "add") {
+      renderStack();
+      return;
+    }
     const left = unused();
     if (left.length) {
-      await sleep(350);
-      if (phase !== "add") return;
+      await sleep(80);
+      if (phase !== "add") {
+        renderStack();
+        return;
+      }
       const pick = left[Math.floor(Math.random() * left.length)]!;
       stack.push(pick);
       paintTiles();
-      renderStack();
+      await dropWordOntoStack(pick);
     }
-    if (phase !== "add") return;
+    if (phase !== "add") {
+      renderStack();
+      return;
+    }
     await startMemorize();
     return;
   }
@@ -438,7 +523,12 @@ async function onTap(word: string): Promise<void> {
     rebuildAt += 1;
     grantIncrement();
     paintTiles();
-    renderStack();
+    busy = true;
+    await dropWordOntoStack(word);
+    if (phase !== "stack") {
+      renderStack();
+      return;
+    }
     if (rebuildAt === stack.length) {
       if (stack.length < 15) {
         score = stack.length;
@@ -454,7 +544,9 @@ async function onTap(word: string): Promise<void> {
         endurancePass += 1;
       }
       await startEnduranceRound();
+      return;
     }
+    busy = false;
   }
 }
 
@@ -463,6 +555,7 @@ async function gameOver(): Promise<void> {
   cancelMem();
   setTimerIdle();
   phase = "over";
+  resetStackMotion();
   expandSheet(false);
   paintTiles();
   renderStack();
@@ -604,6 +697,7 @@ async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<voi
   words = today.words.slice();
   makeTiles(words);
   paintTiles();
+  resetStackMotion();
   renderStack();
   expandSheet(false);
 
@@ -628,6 +722,7 @@ function moveSheet(clientY: number): void {
   const max = collapsedOffset();
   const lifted = Math.max(0, Math.min(max, sheetDragY - clientY));
   gridSheetEl.style.transform = `translateY(${max - lifted}px)`;
+  applyStackDismiss(Math.min(0.85, lifted / SHEET_PULL_THRESHOLD), false);
   if (lifted >= SHEET_PULL_THRESHOLD) {
     sheetTriggered = true;
     sheetDragY = null;
@@ -646,6 +741,7 @@ gridSheetEl.addEventListener("pointerdown", (e) => {
   sheetTriggered = false;
   gridSheetEl.style.transition = "none";
   gridSheetEl.style.transform = `translateY(${collapsedOffset()}px)`;
+  applyStackDismiss(0, false);
 });
 gridSheetEl.addEventListener("pointermove", (e) => {
   if (sheetPointerId !== e.pointerId) return;
@@ -660,11 +756,14 @@ function endSheetDrag(e: PointerEvent): void {
   if (!sheetTriggered && phase === "memorize") {
     gridSheetEl.style.transition = "transform 220ms ease";
     gridSheetEl.style.transform = `translateY(${collapsedOffset()}px)`;
+    applyStackDismiss(0, true);
     window.setTimeout(() => {
       if (phase === "memorize") {
         gridSheetEl.classList.add("collapsed", "pullable");
         gridSheetEl.style.transition = "";
         gridSheetEl.style.transform = "";
+        resetStackMotion();
+        stackEl.classList.add("is-memorize");
       }
     }, 220);
   }
