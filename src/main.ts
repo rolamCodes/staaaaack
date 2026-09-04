@@ -52,6 +52,15 @@ const gateHandle = document.getElementById("gate-handle") as HTMLInputElement;
 const gatePass = document.getElementById("gate-pass") as HTMLInputElement;
 const gateError = document.getElementById("gate-error")!;
 const gateIn = document.getElementById("gate-in")!;
+const guideEl = document.getElementById("guide")!;
+const guideGo = document.getElementById("guide-go")!;
+const guideTrack = document.getElementById("guide-track")!;
+const guideViewport = document.getElementById("guide-viewport")!;
+const guideDots = [...document.querySelectorAll("#guide-dots button")];
+const menuHowto = document.getElementById("menu-howto") as HTMLButtonElement;
+const GUIDE_STEPS = 5;
+let guideStep = 0;
+let guideBlocking = false;
 
 let sessionToken = localStorage.getItem(TOKEN_KEY);
 let currentHandle = "";
@@ -483,6 +492,7 @@ async function onTap(word: string): Promise<void> {
   if (scoresEl.classList.contains("show")) return;
   if (endEl.classList.contains("show")) return;
   if (gateEl.classList.contains("show")) return;
+  if (guideEl.classList.contains("show")) return;
   ensureAudio();
   if (phase === "add") {
     if (stack.includes(word)) return;
@@ -676,7 +686,38 @@ async function afterAuth(): Promise<void> {
   }
   currentHandle = me.handle;
   menuHandle.textContent = `@${me.handle}`;
+  if (isPlaytest || !me.onboarded) {
+    showGuide(0, true);
+    return;
+  }
   await boot(isPlaytest ? false : me.todaySubmitted, me.todayScore);
+}
+
+function showGuide(step: number, blocking = guideBlocking): void {
+  guideBlocking = blocking;
+  guideStep = Math.max(0, Math.min(GUIDE_STEPS - 1, step));
+  guideTrack.style.transform = `translateX(-${guideStep * 100}%)`;
+  guideDots.forEach((dot, i) => {
+    dot.classList.toggle("on", i === guideStep);
+  });
+  guideGo.textContent = guideStep === GUIDE_STEPS - 1 ? "Play" : "Next";
+  guideEl.classList.add("show");
+}
+
+async function finishGuide(): Promise<void> {
+  const replay = !guideBlocking;
+  if (sessionToken) {
+    await convex.mutation(api.players.completeOnboarding, { sessionToken });
+  }
+  guideEl.classList.remove("show");
+  guideBlocking = false;
+  if (replay) {
+    resumeMem();
+    return;
+  }
+  if (!sessionToken) return;
+  const me = await convex.query(api.players.getMe, { sessionToken });
+  await boot(isPlaytest ? false : Boolean(me?.todaySubmitted), me?.todayScore);
 }
 
 async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<void> {
@@ -684,6 +725,7 @@ async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<voi
   setTimerIdle();
   endEl.classList.remove("show");
   scoresEl.classList.remove("show");
+  guideEl.classList.remove("show");
   closeMenu(false);
   stack = [];
   rebuildAt = 0;
@@ -731,6 +773,7 @@ function moveSheet(clientY: number): void {
 }
 
 gridSheetEl.addEventListener("pointerdown", (e) => {
+  if (guideEl.classList.contains("show")) return;
   if (phase !== "memorize") return;
   e.preventDefault();
   gridSheetEl.setPointerCapture(e.pointerId);
@@ -801,6 +844,8 @@ async function signOut(): Promise<void> {
   localStorage.removeItem(TOKEN_KEY);
   endEl.classList.remove("show");
   scoresEl.classList.remove("show");
+  guideEl.classList.remove("show");
+  guideBlocking = false;
   gateEl.classList.add("show");
   gatePass.value = "";
   if (token) {
@@ -820,6 +865,12 @@ menuBackdrop.addEventListener("click", () => {
 });
 menuLeaderboard.addEventListener("click", (e) => {
   void openScores(e);
+});
+menuHowto.addEventListener("click", () => {
+  closeMenu(false);
+  scoresEl.classList.remove("show");
+  pauseMem();
+  showGuide(0, false);
 });
 menuFeedback.addEventListener("click", () => {
   closeMenu();
@@ -842,10 +893,39 @@ gateForm.addEventListener("submit", (e) => {
 gateIn.addEventListener("click", () => {
   void submitAuth("signin");
 });
+guideGo.addEventListener("click", () => {
+  if (guideStep >= GUIDE_STEPS - 1) {
+    void finishGuide();
+    return;
+  }
+  showGuide(guideStep + 1);
+});
+guideDots.forEach((dot, i) => {
+  dot.addEventListener("click", () => {
+    showGuide(i);
+  });
+});
+let guideSwipeX: number | null = null;
+guideViewport.addEventListener("pointerdown", (e) => {
+  guideSwipeX = e.clientX;
+});
+window.addEventListener("pointerup", (e) => {
+  if (guideSwipeX == null || !guideEl.classList.contains("show")) {
+    guideSwipeX = null;
+    return;
+  }
+  const dx = e.clientX - guideSwipeX;
+  guideSwipeX = null;
+  if (dx <= -48) showGuide(guideStep + 1);
+  if (dx >= 48) showGuide(guideStep - 1);
+});
 window.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (menuButton.getAttribute("aria-expanded") === "true") {
     closeMenu();
+  } else if (guideEl.classList.contains("show") && !guideBlocking) {
+    guideEl.classList.remove("show");
+    resumeMem();
   } else if (scoresEl.classList.contains("show")) {
     scoresEl.classList.remove("show");
     resumeMem();
