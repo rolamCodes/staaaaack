@@ -777,17 +777,13 @@ async function applyMatch(view: MatchView | null): Promise<void> {
   const samePrefix =
     view.stack.length === renderedStack.length + 1 &&
     renderedStack.every((w, i) => w === view.stack[i]);
-  if (samePrefix && (!unlocked || matchNeedsAdd(view) === false || !becameUnlocked)) {
+  if (samePrefix) {
     const added = view.stack[view.stack.length - 1]!;
-    if (!unlocked) {
-      phase = "memorize";
-      await dropWordOntoStack(added);
-    }
+    phase = "memorize";
+    await dropWordOntoStack(added);
   } else if (view.stack.join("\0") !== renderedStack.join("\0")) {
-    if (!unlocked) {
-      phase = "memorize";
-      renderStack();
-    }
+    phase = "memorize";
+    renderStack();
   }
   renderedStack = view.stack.slice();
 
