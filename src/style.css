@@ -391,14 +391,17 @@ header .logo {
 }
 #guide {
   z-index: 6;
-  background: rgba(0, 0, 0, 0.78);
+  background: transparent;
   place-items: center;
   padding: 20px;
 }
 .guide-card {
   width: min(360px, calc(100vw - 32px));
-  background: #1A1A1A;
-  border-radius: 32px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border: 1px solid var(--line);
+  border-radius: 16px;
   padding: 28px 24px 20px;
   overflow: hidden;
 }
@@ -451,7 +454,7 @@ header .logo {
   width: 180px;
   height: 2px;
   margin-left: -90px;
-  background: #fff;
+  background: var(--muted-text);
 }
 .guide-sheet-peek {
   position: absolute;
