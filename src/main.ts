@@ -6,6 +6,8 @@ const TOKEN_KEY = "staaaaack-session";
 const CIRC = 2 * Math.PI * 15.5;
 const START_BUDGET_MS = 30_000;
 const INCREMENT_MS = 1_000;
+const SHEET_PEEK = 44;
+const SHEET_PULL_THRESHOLD = 72;
 const isPlaytest =
   window.location.pathname.replace(/\/+$/, "") === "/playtest";
 
@@ -16,15 +18,26 @@ if (!convexUrl) {
 const convex = new ConvexClient(convexUrl);
 
 const gridEl = document.getElementById("grid")!;
-const stackEl = document.getElementById("stack")!;
+const gridSheetEl = document.getElementById("grid-sheet")!;
 const stackWordsEl = document.getElementById("stack-words")!;
-const hideBtn = document.getElementById("hide") as HTMLButtonElement;
 const timerEl = document.getElementById("timer")!;
 const timerNum = timerEl.querySelector(".num")!;
 const ringSolid = timerEl.querySelector(".ring-solid") as SVGCircleElement;
 const endEl = document.getElementById("end")!;
 const scoresEl = document.getElementById("scores")!;
-const trophyBtn = document.getElementById("trophy")!;
+const menuButton = document.getElementById("menu-button") as HTMLButtonElement;
+const menuBackdrop = document.getElementById("menu-backdrop")!;
+const menuPopover = document.getElementById("menu-popover")!;
+const menuHandle = document.getElementById("menu-handle")!;
+const menuLeaderboard = document.getElementById(
+  "menu-leaderboard"
+) as HTMLButtonElement;
+const menuFeedback = document.getElementById(
+  "menu-feedback"
+) as HTMLAnchorElement;
+const menuSignout = document.getElementById(
+  "menu-signout"
+) as HTMLButtonElement;
 const againBtn = document.getElementById("again") as HTMLButtonElement;
 const seeBoardBtn = document.getElementById("see-board") as HTMLButtonElement;
 const tomorrowEl = document.getElementById("tomorrow")!;
@@ -37,10 +50,9 @@ const gateHandle = document.getElementById("gate-handle") as HTMLInputElement;
 const gatePass = document.getElementById("gate-pass") as HTMLInputElement;
 const gateError = document.getElementById("gate-error")!;
 const gateIn = document.getElementById("gate-in")!;
-const guideEl = document.getElementById("guide")!;
-const guideGo = document.getElementById("guide-go")!;
 
 let sessionToken = localStorage.getItem(TOKEN_KEY);
+let currentHandle = "";
 let words: string[] = [];
 let tiles: HTMLButtonElement[] = [];
 let stack: string[] = [];
@@ -135,8 +147,28 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function setHideControl(on: boolean): void {
-  hideBtn.hidden = !on;
+function collapsedOffset(): number {
+  return Math.max(0, gridSheetEl.offsetHeight - SHEET_PEEK);
+}
+
+function expandSheet(animated: boolean): void {
+  gridSheetEl.classList.remove("collapsed", "pullable", "dragging");
+  if (animated) {
+    gridSheetEl.style.transition = "transform 320ms cubic-bezier(.2,.7,.2,1)";
+    gridSheetEl.style.transform = "translateY(0)";
+  } else {
+    gridSheetEl.style.transition = "none";
+    gridSheetEl.style.transform = "translateY(0)";
+    void gridSheetEl.offsetHeight;
+    gridSheetEl.style.transition = "";
+    gridSheetEl.style.transform = "";
+  }
+}
+
+function collapseSheet(): void {
+  gridSheetEl.classList.add("collapsed", "pullable");
+  gridSheetEl.style.transition = "";
+  gridSheetEl.style.transform = "";
 }
 
 function makeTiles(list: string[]): void {
@@ -316,7 +348,7 @@ function resumeMem(): void {
 function startAdd(): void {
   phase = "add";
   rebuildAt = 0;
-  setHideControl(false);
+  expandSheet(false);
   paintTiles();
   renderStack();
   busy = false;
@@ -328,16 +360,18 @@ function startMemorize(): void {
   busy = true;
   paintTiles();
   renderStack();
-  setHideControl(true);
+  collapseSheet();
 }
 
 async function finishMemorize(): Promise<void> {
   if (phase !== "memorize") return;
   phase = "stack";
-  stackEl.classList.add("hiding");
-  await sleep(380);
-  stackEl.classList.remove("hiding");
-  setHideControl(false);
+  gridSheetEl.classList.remove("collapsed", "pullable", "dragging");
+  gridSheetEl.style.transition = "transform 320ms cubic-bezier(.2,.7,.2,1)";
+  gridSheetEl.style.transform = "translateY(0)";
+  await sleep(320);
+  gridSheetEl.style.transition = "";
+  gridSheetEl.style.transform = "";
   if (endEl.classList.contains("show")) return;
   await startRebuild();
 }
@@ -346,7 +380,7 @@ async function startRebuild(): Promise<void> {
   phase = "stack";
   rebuildAt = 0;
   busy = true;
-  setHideControl(false);
+  expandSheet(false);
   renderStack();
   paintTiles();
   await flipShuffle();
@@ -359,6 +393,7 @@ async function startEnduranceRound(): Promise<void> {
   phase = "stack";
   rebuildAt = 0;
   busy = true;
+  expandSheet(false);
   renderStack();
   paintTiles();
   await flipShuffle();
@@ -372,7 +407,6 @@ async function onTap(word: string): Promise<void> {
   if (scoresEl.classList.contains("show")) return;
   if (endEl.classList.contains("show")) return;
   if (gateEl.classList.contains("show")) return;
-  if (guideEl.classList.contains("show")) return;
   ensureAudio();
   if (phase === "add") {
     if (stack.includes(word)) return;
@@ -428,7 +462,7 @@ async function gameOver(): Promise<void> {
   cancelMem();
   setTimerIdle();
   phase = "over";
-  setHideControl(false);
+  expandSheet(false);
   paintTiles();
   renderStack();
   document.getElementById("end-title")!.textContent = "GAME OVER";
@@ -462,8 +496,14 @@ function showPlayableEnd(): void {
   tomorrowEl.hidden = true;
 }
 
+function formatBoardDate(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getMonth() + 1}/${d.getDate()}/${String(d.getFullYear()).slice(-2)}`;
+}
+
 async function openScores(e: Event): Promise<void> {
   e.stopPropagation();
+  closeMenu(false);
   const open = scoresEl.classList.contains("show");
   if (open) {
     scoresEl.classList.remove("show");
@@ -480,9 +520,10 @@ async function openScores(e: Event): Promise<void> {
     boardRows.innerHTML = rows
       .map(
         (row) => `<div class="board-row">
-        <div class="board-handle">${escapeHtml(row.handle)}</div>
-        <div class="board-score">${row.score}</div>
-        <div class="board-theme">${escapeHtml(row.theme)}</div>
+        <span>${escapeHtml("@" + row.handle)}</span>
+        <span>${escapeHtml(row.theme)}</span>
+        <span>${row.score}</span>
+        <span>${escapeHtml(formatBoardDate(row.finishedAt))}</span>
       </div>`
       )
       .join("");
@@ -539,18 +580,9 @@ async function afterAuth(): Promise<void> {
     gateEl.classList.add("show");
     return;
   }
-  if (!me.onboarded) {
-    guideEl.classList.add("show");
-    return;
-  }
+  currentHandle = me.handle;
+  menuHandle.textContent = `@${me.handle}`;
   await boot(isPlaytest ? false : me.todaySubmitted, me.todayScore);
-}
-
-async function finishGuide(): Promise<void> {
-  if (!sessionToken) return;
-  await convex.mutation(api.players.completeOnboarding, { sessionToken });
-  guideEl.classList.remove("show");
-  await boot(false);
 }
 
 async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<void> {
@@ -558,6 +590,7 @@ async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<voi
   setTimerIdle();
   endEl.classList.remove("show");
   scoresEl.classList.remove("show");
+  closeMenu(false);
   stack = [];
   rebuildAt = 0;
   score = 0;
@@ -571,6 +604,7 @@ async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<voi
   makeTiles(words);
   paintTiles();
   renderStack();
+  expandSheet(false);
 
   if (alreadySubmitted) {
     document.getElementById("end-title")!.textContent = "GAME OVER";
@@ -584,30 +618,114 @@ async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<voi
   startAdd();
 }
 
-let swipeY: number | null = null;
-let swipeAt = 0;
+let sheetDragY: number | null = null;
+let sheetPointerId: number | null = null;
+let sheetTriggered = false;
 
-stackEl.addEventListener("pointerdown", (e) => {
+function moveSheet(clientY: number): void {
+  if (sheetDragY == null || phase !== "memorize" || sheetTriggered) return;
+  const max = collapsedOffset();
+  const lifted = Math.max(0, Math.min(max, sheetDragY - clientY));
+  gridSheetEl.style.transform = `translateY(${max - lifted}px)`;
+  if (lifted >= SHEET_PULL_THRESHOLD) {
+    sheetTriggered = true;
+    sheetDragY = null;
+    void finishMemorize();
+  }
+}
+
+gridSheetEl.addEventListener("pointerdown", (e) => {
   if (phase !== "memorize") return;
-  swipeY = e.clientY;
-  swipeAt = performance.now();
+  e.preventDefault();
+  gridSheetEl.setPointerCapture(e.pointerId);
+  gridSheetEl.classList.add("dragging");
+  gridSheetEl.classList.remove("collapsed");
+  sheetDragY = e.clientY;
+  sheetPointerId = e.pointerId;
+  sheetTriggered = false;
+  gridSheetEl.style.transition = "none";
+  gridSheetEl.style.transform = `translateY(${collapsedOffset()}px)`;
 });
-window.addEventListener("pointerup", (e) => {
-  if (swipeY == null || phase !== "memorize") {
-    swipeY = null;
+gridSheetEl.addEventListener("pointermove", (e) => {
+  if (sheetPointerId !== e.pointerId) return;
+  moveSheet(e.clientY);
+});
+function endSheetDrag(e: PointerEvent): void {
+  if (sheetPointerId !== e.pointerId) return;
+  moveSheet(e.clientY);
+  sheetDragY = null;
+  sheetPointerId = null;
+  gridSheetEl.classList.remove("dragging");
+  if (!sheetTriggered && phase === "memorize") {
+    gridSheetEl.style.transition = "transform 220ms ease";
+    gridSheetEl.style.transform = `translateY(${collapsedOffset()}px)`;
+    window.setTimeout(() => {
+      if (phase === "memorize") {
+        gridSheetEl.classList.add("collapsed", "pullable");
+        gridSheetEl.style.transition = "";
+        gridSheetEl.style.transform = "";
+      }
+    }, 220);
+  }
+  sheetTriggered = false;
+}
+window.addEventListener("pointerup", endSheetDrag);
+window.addEventListener("pointercancel", endSheetDrag);
+
+function openMenu(): void {
+  if (!sessionToken || menuButton.getAttribute("aria-expanded") === "true") {
     return;
   }
-  const dy = swipeY - e.clientY;
-  const dt = performance.now() - swipeAt;
-  swipeY = null;
-  if (dy >= 64 && dt < 500) void finishMemorize();
-});
-hideBtn.addEventListener("click", () => {
-  void finishMemorize();
-});
+  menuHandle.textContent = currentHandle ? `@${currentHandle}` : "@player";
+  menuBackdrop.hidden = false;
+  menuPopover.hidden = false;
+  menuButton.setAttribute("aria-expanded", "true");
+  menuButton.setAttribute("aria-label", "Close menu");
+}
 
-trophyBtn.addEventListener("click", (e) => {
+function closeMenu(_shouldResume = true): void {
+  if (menuButton.getAttribute("aria-expanded") !== "true") return;
+  menuBackdrop.hidden = true;
+  menuPopover.hidden = true;
+  menuButton.setAttribute("aria-expanded", "false");
+  menuButton.setAttribute("aria-label", "Open menu");
+}
+
+async function signOut(): Promise<void> {
+  const token = sessionToken;
+  closeMenu(false);
+  cancelMem();
+  setTimerIdle();
+  sessionToken = null;
+  currentHandle = "";
+  localStorage.removeItem(TOKEN_KEY);
+  endEl.classList.remove("show");
+  scoresEl.classList.remove("show");
+  gateEl.classList.add("show");
+  gatePass.value = "";
+  if (token) {
+    await convex.mutation(api.players.signOut, { sessionToken: token });
+  }
+}
+
+menuButton.addEventListener("click", () => {
+  if (menuButton.getAttribute("aria-expanded") === "true") {
+    closeMenu();
+  } else {
+    openMenu();
+  }
+});
+menuBackdrop.addEventListener("click", () => {
+  closeMenu();
+});
+menuLeaderboard.addEventListener("click", (e) => {
   void openScores(e);
+});
+menuFeedback.addEventListener("click", () => {
+  closeMenu();
+});
+menuSignout.addEventListener("click", () => {
+  void signOut();
 });
 scoresEl.addEventListener("click", closeScores);
 againBtn.addEventListener("click", () => {
@@ -624,8 +742,14 @@ gateForm.addEventListener("submit", (e) => {
 gateIn.addEventListener("click", () => {
   void submitAuth("signin");
 });
-guideGo.addEventListener("click", () => {
-  void finishGuide();
+window.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (menuButton.getAttribute("aria-expanded") === "true") {
+    closeMenu();
+  } else if (scoresEl.classList.contains("show")) {
+    scoresEl.classList.remove("show");
+    resumeMem();
+  }
 });
 
 if (sessionToken) {

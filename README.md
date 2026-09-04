@@ -2,7 +2,7 @@
 
 A mobile-first 15-word memory game. One game per UTC day.
 
-The play screen is the original prototype HTML: trophy, yellow wordmark SVG, timer ring, stack pane, 3×5 pills.
+The play screen is a dark mobile chrome: hamburger menu, yellow wordmark SVG, timer ring, stack pane, and a pullable 3×5 word sheet.
 
 ## Local
 
@@ -41,10 +41,9 @@ Or upload `dist` in the Cloudflare dashboard. Set `VITE_CONVEX_URL` in the Pages
 ## Play
 
 - Claim a handle (3–16 `a-zA-Z0-9_`) and a passphrase (6+). New browser: sign in again.
-- First session shows the rules once.
 - Today’s 15 words come from the server. Lists loop after day 99.
 - One 30s budget for the whole run. It ticks in every phase. Each correct word adds +1s.
-- After the computer adds, swipe up (or tap swipe up to hide) when you’ve memorized. Then rebuild.
+- After the computer adds, the word sheet collapses. Pull it back up when you’ve memorized, then rebuild.
 - After 15, the same list loops and score doubles (15, 30, 60, …).
 - One submitted run per player per UTC day. After that: See board / Back tomorrow.
-- Trophy is the global top 50 (handle, score, theme).
+- The hamburger opens Leaderboard (global top 50), Feedback, and Sign out.
