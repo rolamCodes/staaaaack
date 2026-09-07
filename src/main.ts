@@ -1174,14 +1174,16 @@ async function togglePlaytestTutorial(): Promise<void> {
   guideEl.classList.remove("show");
   endEl.classList.remove("show");
   hideCoach();
+  cancelMem();
+  setTimerIdle();
+  tutorialActive = false;
+  tutorialCleared = false;
   if (playtestTutorialOn) {
     needsTutorial = true;
     showGuide(0, true);
     return;
   }
   needsTutorial = false;
-  tutorialActive = false;
-  tutorialCleared = false;
   targetWords = 15;
   await boot(false);
 }
