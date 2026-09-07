@@ -65,6 +65,14 @@
       </svg>
       How to play
     </button>
+    <button type="button" id="menu-tutorial" role="menuitem" hidden>
+      <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+        <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+      </svg>
+      Tutorial
+      <span id="menu-tutorial-state">Off</span>
+    </button>
     <a id="menu-feedback" href="mailto:?subject=Staaaaack%20feedback" role="menuitem">
       <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>
@@ -103,11 +111,17 @@
   <div id="gate">
     <form id="gate-form" autocomplete="on">
       <input id="gate-handle" type="text" name="username" maxlength="16" autocapitalize="off" autocomplete="username" placeholder="Handle" spellcheck="false">
-      <input id="gate-pass" type="password" name="password" minlength="6" autocomplete="current-password" placeholder="Passphrase">
+      <input id="gate-pass" type="password" name="password" minlength="6" autocomplete="current-password" placeholder="Password">
       <p id="gate-error" hidden></p>
-      <button type="submit" id="gate-claim">Claim handle</button>
-      <button type="button" id="gate-in">Sign in</button>
+      <button type="submit" id="gate-submit">Sign in</button>
+      <p id="gate-switch" class="gate-switch">
+        <span id="gate-switch-lead">Don't have an account?</span>
+        <button type="button" id="gate-mode">Sign up</button>
+      </p>
     </form>
+  </div>
+  <div id="coach" hidden>
+    <div id="coach-tip" role="status"></div>
   </div>
   <div id="guide">
     <div class="guide-card">
@@ -168,6 +182,13 @@
             <h2>New theme every day</h2>
             <p>A new theme every day. One ranked run per UTC day. Let’s play.</p>
           </section>
+          <section class="guide-slide">
+            <div class="guide-visual">
+              <div class="guide-hand">?</div>
+            </div>
+            <h2>Tutorial</h2>
+            <p>Your first run is a short guided game. Highlights and tips will show you what to do.</p>
+          </section>
         </div>
       </div>
       <div class="guide-foot">
@@ -177,6 +198,7 @@
           <button type="button" aria-label="Pull up to rebuild"></button>
           <button type="button" aria-label="Score and double"></button>
           <button type="button" aria-label="New theme every day"></button>
+          <button type="button" aria-label="Tutorial"></button>
         </div>
         <button type="button" id="guide-go">Next</button>
       </div>

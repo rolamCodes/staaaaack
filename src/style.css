@@ -274,7 +274,7 @@ header .logo {
   color: var(--yellow);
   letter-spacing: -0.04em;
 }
-#again, #see-board, #gate-claim, #guide-go {
+#again, #see-board, #gate-submit, #guide-go {
   background: var(--yellow);
   color: #000;
   border: 0;
@@ -380,14 +380,27 @@ header .logo {
   font-weight: 600;
   text-align: center;
 }
-#gate-in {
+#gate-submit {
+  width: 100%;
+}
+.gate-switch {
+  margin: 4px 0 0;
+  text-align: center;
+  color: var(--muted-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.gate-switch button {
   background: none;
   border: 0;
   color: #fff;
   font: inherit;
-  font-size: 16px;
-  padding: 8px;
+  font-size: 14px;
+  font-weight: 800;
+  padding: 0;
   cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 #guide {
   z-index: 6;
@@ -527,6 +540,17 @@ header .logo {
   letter-spacing: -0.06em;
   line-height: 1;
 }
+.guide-hand {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  border: 3px solid var(--yellow);
+  display: grid;
+  place-items: center;
+  color: var(--yellow);
+  font-size: 42px;
+  letter-spacing: -0.04em;
+}
 .guide-foot {
   display: flex;
   align-items: center;
@@ -555,4 +579,108 @@ header .logo {
 #guide-go {
   width: auto;
   padding: 12px 28px;
+}
+#menu-tutorial {
+  justify-content: flex-start;
+}
+#menu-tutorial-state {
+  margin-left: auto;
+  color: var(--muted-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+#menu-tutorial[aria-pressed="true"] #menu-tutorial-state {
+  color: var(--yellow);
+}
+#coach {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  display: none;
+}
+#coach.show {
+  display: block;
+}
+#coach::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+}
+#coach-tip {
+  position: absolute;
+  left: 50%;
+  bottom: max(28%, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(320px, calc(100vw - 40px));
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-align: center;
+  z-index: 2;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+}
+#coach-tip.shake {
+  animation: coach-shake 420ms ease;
+}
+#coach-tip.coach-tip-high {
+  bottom: auto;
+  top: 72px;
+}
+#coach-tip.coach-tip-mid {
+  bottom: 42%;
+}
+@keyframes coach-shake {
+  0%, 100% { transform: translateX(-50%); }
+  20% { transform: translateX(calc(-50% - 8px)); }
+  40% { transform: translateX(calc(-50% + 8px)); }
+  60% { transform: translateX(calc(-50% - 5px)); }
+  80% { transform: translateX(calc(-50% + 5px)); }
+}
+.coach-hi {
+  position: relative;
+}
+.tile.coach-hi {
+  box-shadow: 0 0 0 3px var(--yellow);
+  z-index: 1;
+}
+#stack.coach-hi {
+  z-index: 7;
+  border-radius: 12px;
+  box-shadow: 0 0 0 3px var(--yellow);
+}
+#app.coach-timer header {
+  z-index: 7;
+}
+#timer.coach-hi {
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px var(--yellow);
+  visibility: visible !important;
+}
+#grid-sheet.coach-lift {
+  z-index: 7;
+}
+#grid-sheet.coach-hi {
+  z-index: 7;
+  box-shadow: 0 0 0 3px var(--yellow);
+}
+#grid-sheet.coach-hi .sheet-handle {
+  border-top-color: var(--yellow);
+}
+#grid.tutorial-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+#grid.tutorial-grid .tile:nth-child(4) {
+  grid-column: 1;
+}
+#grid.tutorial-grid .tile:nth-child(5) {
+  grid-column: 2;
 }

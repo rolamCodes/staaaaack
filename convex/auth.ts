@@ -46,7 +46,7 @@ export const claimHandle = action({
     if (args.password.length < 6) {
       return {
         success: false,
-        error: "Passphrase must be at least 6 characters",
+        error: "Password must be at least 6 characters",
       };
     }
 
@@ -91,12 +91,12 @@ export const signIn = action({
     });
 
     if (!player) {
-      return { success: false, error: "Invalid handle or passphrase" };
+      return { success: false, error: "Invalid handle or password" };
     }
 
     const passwordHash = hashPassword(args.password, player.passwordSalt);
     if (passwordHash !== player.passwordHash) {
-      return { success: false, error: "Invalid handle or passphrase" };
+      return { success: false, error: "Invalid handle or password" };
     }
 
     const token = newSessionToken();
