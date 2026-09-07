@@ -267,6 +267,13 @@ header .logo {
   letter-spacing: 0.18em;
   color: #fff;
 }
+#end-kicker {
+  margin: 24px 0 -18px;
+  color: var(--muted-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+#end-kicker[hidden] { display: none; }
 #end .score {
   margin: 28px 0 36px;
   font-size: 96px;
@@ -540,16 +547,14 @@ header .logo {
   letter-spacing: -0.06em;
   line-height: 1;
 }
-.guide-hand {
-  width: 88px;
-  height: 88px;
-  border-radius: 50%;
-  border: 3px solid var(--yellow);
-  display: grid;
-  place-items: center;
-  color: var(--yellow);
-  font-size: 42px;
-  letter-spacing: -0.04em;
+.guide-tutorial-icon {
+  width: 112px;
+  height: 112px;
+  fill: none;
+  stroke: var(--yellow);
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .guide-foot {
   display: flex;
@@ -595,55 +600,40 @@ header .logo {
 #coach {
   position: absolute;
   inset: 0;
-  z-index: 6;
+  z-index: 8;
   pointer-events: none;
   display: none;
 }
 #coach.show {
   display: block;
 }
-#coach::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-}
 #coach-tip {
   position: absolute;
-  left: 50%;
-  bottom: max(28%, env(safe-area-inset-bottom));
-  transform: translateX(-50%);
-  width: min(320px, calc(100vw - 40px));
+  top: 72px;
+  left: 16px;
+  right: 16px;
+  width: auto;
   padding: 14px 18px;
-  border: 1px solid var(--line);
+  border: 0;
   border-radius: 16px;
-  background: rgba(0, 0, 0, 0.88);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  color: #fff;
+  background: #fff;
+  color: #000;
   font-size: 15px;
   font-weight: 600;
   line-height: 1.4;
-  text-align: center;
+  text-align: left;
   z-index: 2;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
 }
 #coach-tip.shake {
   animation: coach-shake 420ms ease;
 }
-#coach-tip.coach-tip-high {
-  bottom: auto;
-  top: 72px;
-}
-#coach-tip.coach-tip-mid {
-  bottom: 42%;
-}
 @keyframes coach-shake {
-  0%, 100% { transform: translateX(-50%); }
-  20% { transform: translateX(calc(-50% - 8px)); }
-  40% { transform: translateX(calc(-50% + 8px)); }
-  60% { transform: translateX(calc(-50% - 5px)); }
-  80% { transform: translateX(calc(-50% + 5px)); }
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
 }
 .coach-hi {
   position: relative;
@@ -674,13 +664,4 @@ header .logo {
 }
 #grid-sheet.coach-hi .sheet-handle {
   border-top-color: var(--yellow);
-}
-#grid.tutorial-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-#grid.tutorial-grid .tile:nth-child(4) {
-  grid-column: 1;
-}
-#grid.tutorial-grid .tile:nth-child(5) {
-  grid-column: 2;
 }

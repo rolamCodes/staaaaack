@@ -10,7 +10,23 @@ const INCREMENT_MS = 3_000;
 const SHEET_PEEK = 44;
 const SHEET_PULL_THRESHOLD = 72;
 const WORD_DROP_MS = 340;
-const TUTORIAL_WORDS = ["Mayo", "Tomato", "Cheese", "Lettuce", "Bacon"];
+const TUTORIAL_WORDS = [
+  "Mayo",
+  "Tomato",
+  "Cheese",
+  "Lettuce",
+  "Bacon",
+  "Pickle",
+  "Mustard",
+  "Onion",
+  "Avocado",
+  "Turkey",
+  "Ham",
+  "Tuna",
+  "Olive",
+  "Pepper",
+  "Sprouts",
+];
 const isPlaytest =
   window.location.pathname.replace(/\/+$/, "") === "/playtest";
 
@@ -49,6 +65,7 @@ const menuTutorialState = document.getElementById("menu-tutorial-state")!;
 const againBtn = document.getElementById("again") as HTMLButtonElement;
 const seeBoardBtn = document.getElementById("see-board") as HTMLButtonElement;
 const tomorrowEl = document.getElementById("tomorrow")!;
+const endKickerEl = document.getElementById("end-kicker")!;
 const playtestNoteEl = document.getElementById("playtest-note")!;
 const boardRows = document.getElementById("board-rows")!;
 const boardEmpty = document.getElementById("board-empty")!;
@@ -76,7 +93,6 @@ let gateMode: "signin" | "signup" = "signin";
 type CoachStep =
   | "tap-add"
   | "computer-add"
-  | "timer-tip"
   | "memorize"
   | "pull"
   | "rebuild"
@@ -100,7 +116,6 @@ let tutorialActive = false;
 let tutorialCleared = false;
 let needsTutorial = false;
 let coachStep: CoachStep = null;
-let timerTipShown = false;
 let playtestTutorialOn =
   isPlaytest && localStorage.getItem(PLAYTEST_TUTORIAL_KEY) === "1";
 
@@ -239,10 +254,9 @@ function hideCoach(): void {
 function showCoach(
   step: CoachStep,
   text: string,
-  targets: Element[],
-  tipPos: "high" | "mid" | "low" = "low"
+  targets: Element[]
 ): void {
-  if (!tutorialActive || !step) {
+  if (!tutorialCoachActive() || !step) {
     hideCoach();
     return;
   }
@@ -259,12 +273,7 @@ function showCoach(
   }
   if (liftsSheet) gridSheetEl.classList.add("coach-lift");
   coachTip.textContent = text;
-  coachTip.className =
-    tipPos === "high"
-      ? "coach-tip-high"
-      : tipPos === "mid"
-        ? "coach-tip-mid"
-        : "";
+  coachTip.className = "";
   coachEl.hidden = false;
   coachEl.classList.add("show");
 }
@@ -286,8 +295,13 @@ function coachExpectedTile(): HTMLButtonElement | null {
   return tiles.find((b) => b.dataset.word === expected) ?? null;
 }
 
+function tutorialCoachActive(): boolean {
+  if (!tutorialActive) return false;
+  return phase === "add" ? stack.length < 4 : stack.length <= 4;
+}
+
 function updateCoachForPhase(): void {
-  if (!tutorialActive || phase === "over") {
+  if (!tutorialCoachActive() || phase === "over") {
     hideCoach();
     return;
   }
@@ -298,9 +312,8 @@ function updateCoachForPhase(): void {
       "tap-add",
       firstCycle
         ? "Tap a word to add it to the stack"
-        : "Add another word to grow the stack",
-      unusedTiles,
-      "mid"
+        : "Your turn again — pick one more word",
+      unusedTiles
     );
     return;
   }
@@ -309,24 +322,21 @@ function updateCoachForPhase(): void {
       showCoach(
         "pull",
         "Pull the sheet up when you’re ready to rebuild",
-        [gridSheetEl],
-        "mid"
+        [gridSheetEl]
       );
       return;
     }
     showCoach(
       "memorize",
       "Memorize the stack — oldest at the bottom, newest on top",
-      [stackEl],
-      "high"
+      [stackEl]
     );
     window.setTimeout(() => {
-      if (!tutorialActive || phase !== "memorize") return;
+      if (!tutorialCoachActive() || phase !== "memorize") return;
       showCoach(
         "pull",
         "Pull the sheet up when you’re ready to rebuild",
-        [gridSheetEl],
-        "mid"
+        [gridSheetEl]
       );
     }, 2200);
     return;
@@ -335,39 +345,24 @@ function updateCoachForPhase(): void {
     const expected = coachExpectedTile();
     showCoach(
       "rebuild",
-      "Rebuild oldest-first. Tap the next word in order.",
-      expected ? [expected] : [],
-      "mid"
+      "Rebuild oldest-first. Tap the highlighted word.",
+      expected ? [expected] : []
     );
   }
 }
 
 async function showComputerAddCoach(): Promise<void> {
-  if (!tutorialActive) return;
+  if (!tutorialCoachActive() || stack.length !== 1) return;
   showCoach(
     "computer-add",
-    "The computer adds a word too. Watch the stack grow.",
-    [stackEl],
-    "high"
+    "The computer picks next. Watch where its word lands.",
+    [stackEl]
   );
   await sleep(1400);
 }
 
-async function maybeShowTimerTip(): Promise<void> {
-  if (!tutorialActive || timerTipShown) return;
-  timerTipShown = true;
-  showCoach(
-    "timer-tip",
-    "Each correct word adds 3 seconds to the clock",
-    [timerEl],
-    "high"
-  );
-  await sleep(1800);
-}
-
 function makeTiles(list: string[]): void {
   gridEl.innerHTML = "";
-  gridEl.classList.toggle("tutorial-grid", list.length === 5);
   tiles = list.map((word) => {
     const b = document.createElement("button");
     b.type = "button";
@@ -699,7 +694,7 @@ async function onTap(word: string): Promise<void> {
       return;
     }
     const left = unused();
-    if (left.length) {
+    if (left.length && stack.length < targetWords) {
       await showComputerAddCoach();
       await sleep(80);
       if (phase !== "add") {
@@ -710,7 +705,6 @@ async function onTap(word: string): Promise<void> {
       stack.push(pick);
       paintTiles();
       await dropWordOntoStack(pick);
-      await maybeShowTimerTip();
     }
     if (phase !== "add") {
       renderStack();
@@ -722,8 +716,12 @@ async function onTap(word: string): Promise<void> {
   if (phase === "stack") {
     const expected = stack[rebuildAt];
     if (word !== expected) {
-      if (tutorialActive) {
+      if (tutorialCoachActive()) {
         shakeCoachTip();
+        return;
+      }
+      if (tutorialActive) {
+        void finishTutorial();
         return;
       }
       void gameOver();
@@ -746,7 +744,7 @@ async function onTap(word: string): Promise<void> {
       }
       if (tutorialActive) {
         score = targetWords;
-        void tutorialSuccess();
+        void finishTutorial();
         return;
       }
       if (!endurance) {
@@ -765,7 +763,7 @@ async function onTap(word: string): Promise<void> {
   }
 }
 
-async function tutorialSuccess(): Promise<void> {
+async function finishTutorial(): Promise<void> {
   if (phase === "over") return;
   cancelMem();
   setTimerIdle();
@@ -776,11 +774,12 @@ async function tutorialSuccess(): Promise<void> {
   expandSheet(false);
   paintTiles();
   renderStack();
-  document.getElementById("end-title")!.textContent = "TUTORIAL CLEAR";
+  document.getElementById("end-title")!.textContent = "YOU’RE READY";
+  endKickerEl.hidden = false;
   document.getElementById("end-score")!.textContent = String(score);
   endEl.classList.add("show");
   againBtn.hidden = false;
-  againBtn.textContent = "Play";
+  againBtn.textContent = "Play today’s game";
   seeBoardBtn.hidden = true;
   tomorrowEl.hidden = true;
   playtestNoteEl.hidden = true;
@@ -788,6 +787,10 @@ async function tutorialSuccess(): Promise<void> {
 
 async function gameOver(): Promise<void> {
   if (phase === "over") return;
+  if (tutorialActive) {
+    await finishTutorial();
+    return;
+  }
   cancelMem();
   setTimerIdle();
   phase = "over";
@@ -797,15 +800,10 @@ async function gameOver(): Promise<void> {
   paintTiles();
   renderStack();
   document.getElementById("end-title")!.textContent = "GAME OVER";
+  endKickerEl.hidden = true;
   document.getElementById("end-score")!.textContent = String(score);
   endEl.classList.add("show");
-  againBtn.textContent = tutorialActive ? "Try again" : "Play again";
-
-  if (tutorialActive) {
-    showPlayableEnd();
-    playtestNoteEl.hidden = true;
-    return;
-  }
+  againBtn.textContent = "Play again";
 
   if (!isPlaytest && sessionToken && !submittedToday) {
     submittedToday = true;
@@ -977,7 +975,6 @@ async function finishGuide(): Promise<void> {
 async function startTutorial(): Promise<void> {
   tutorialActive = true;
   tutorialCleared = false;
-  timerTipShown = false;
   targetWords = 5;
   hideCoach();
   cancelMem();
@@ -994,6 +991,7 @@ async function startTutorial(): Promise<void> {
   phase = "add";
   submittedToday = false;
   againBtn.textContent = "Play again";
+  endKickerEl.hidden = true;
   words = TUTORIAL_WORDS.slice();
   makeTiles(words);
   paintTiles();
@@ -1015,6 +1013,7 @@ async function finishTutorialAndPlay(): Promise<void> {
   targetWords = 15;
   hideCoach();
   againBtn.textContent = "Play again";
+  endKickerEl.hidden = true;
   if (isPlaytest) playtestNoteEl.hidden = false;
   await boot(false);
 }
@@ -1038,6 +1037,7 @@ async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<voi
   phase = "add";
   submittedToday = isPlaytest ? false : alreadySubmitted;
   againBtn.textContent = "Play again";
+  endKickerEl.hidden = true;
   if (isPlaytest) playtestNoteEl.hidden = false;
 
   const today = await convex.query(api.game.getToday, {});

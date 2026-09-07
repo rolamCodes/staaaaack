@@ -90,6 +90,7 @@
   </div>
   <div id="end">
     <h2 id="end-title">GAME OVER</h2>
+    <p id="end-kicker" hidden>Your tutorial score</p>
     <div class="score" id="end-score">0</div>
     <button type="button" id="again">Play again</button>
     <button type="button" id="see-board" hidden>See board</button>
@@ -184,7 +185,12 @@
           </section>
           <section class="guide-slide">
             <div class="guide-visual">
-              <div class="guide-hand">?</div>
+              <svg class="guide-tutorial-icon" aria-hidden="true" viewBox="0 0 96 96">
+                <path d="M12 38 48 20l36 18-36 18L12 38Z"/>
+                <path d="M27 47v18c12 11 30 11 42 0V47"/>
+                <path d="M84 40v25"/>
+                <circle cx="84" cy="70" r="4"/>
+              </svg>
             </div>
             <h2>Tutorial</h2>
             <p>Your first run is a short guided game. Highlights and tips will show you what to do.</p>
