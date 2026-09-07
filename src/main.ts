@@ -961,15 +961,15 @@ async function finishGuide(): Promise<void> {
   const replay = !guideBlocking;
   guideEl.classList.remove("show");
   guideBlocking = false;
+  if (needsTutorial) {
+    await startTutorial();
+    return;
+  }
   if (replay) {
     resumeMem();
     return;
   }
   if (!sessionToken) return;
-  if (needsTutorial) {
-    await startTutorial();
-    return;
-  }
   const me = await convex.query(api.players.getMe, { sessionToken });
   await boot(isPlaytest ? false : Boolean(me?.todaySubmitted), me?.todayScore);
 }
@@ -1183,7 +1183,17 @@ async function togglePlaytestTutorial(): Promise<void> {
     showGuide(0, true);
     return;
   }
-  needsTutorial = false;
+  let onboarded = true;
+  if (sessionToken) {
+    const me = await convex.query(api.players.getMe, { sessionToken });
+    onboarded = Boolean(me?.onboarded);
+  }
+  needsTutorial = !onboarded;
+  if (needsTutorial) {
+    targetWords = 5;
+    showGuide(0, true);
+    return;
+  }
   targetWords = 15;
   await boot(false);
 }
@@ -1205,7 +1215,7 @@ menuHowto.addEventListener("click", () => {
   closeMenu(false);
   scoresEl.classList.remove("show");
   pauseMem();
-  showGuide(0, false);
+  showGuide(0, needsTutorial);
 });
 menuTutorial.addEventListener("click", () => {
   void togglePlaytestTutorial();
@@ -1269,7 +1279,11 @@ window.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (menuButton.getAttribute("aria-expanded") === "true") {
     closeMenu();
-  } else if (guideEl.classList.contains("show") && !guideBlocking) {
+  } else if (
+    guideEl.classList.contains("show") &&
+    !guideBlocking &&
+    !needsTutorial
+  ) {
     guideEl.classList.remove("show");
     resumeMem();
   } else if (scoresEl.classList.contains("show")) {
