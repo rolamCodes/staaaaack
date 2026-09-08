@@ -405,6 +405,17 @@ export const rebuildTap = mutation({
       return { success: true };
     }
 
+    if (finishedRebuild) {
+      await ctx.db.patch(match._id, {
+        rebuildAt,
+        score: match.stack.length,
+        p1LeftMs: tickingP1 ? nextLeft : p1Left,
+        p2LeftMs: tickingP1 ? p2Left : nextLeft,
+        turnStartedAt: now,
+      });
+      return { success: true };
+    }
+
     await ctx.db.patch(match._id, {
       rebuildAt,
       p1LeftMs: tickingP1 ? nextLeft : p1Left,

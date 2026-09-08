@@ -127,6 +127,7 @@ let matchView: MatchView | null = null;
 let pvpMemorize = false;
 let pvpWasUnlocked = false;
 let pvpTimeoutSent = false;
+let matchTapInFlight = false;
 let renderedStack: string[] = [];
 
 if (isPlaytest) {
@@ -587,13 +588,26 @@ async function startEnduranceRound(): Promise<void> {
 }
 
 async function onMatchTap(word: string): Promise<void> {
-  if (!matchCode || !matchView || !sessionToken) return;
+  if (!matchCode || !matchView || !sessionToken || matchTapInFlight) return;
   if (pvpMemorize) return;
   const seat = matchSeat(matchView);
   if (!seat || !matchUnlocked(matchView, seat)) return;
-  if (matchNeedsRebuild(matchView)) {
-    if (matchView.stack[rebuildAt] !== word) {
-      busy = true;
+  matchTapInFlight = true;
+  busy = true;
+  try {
+    if (matchNeedsRebuild(matchView)) {
+      const at = matchView.rebuildAt;
+      if (matchView.stack[at] !== word) {
+        await convex.mutation(api.matches.rebuildTap, {
+          sessionToken,
+          code: matchCode,
+          word,
+        });
+        return;
+      }
+      rebuildAt = at + 1;
+      paintTiles();
+      await dropWordOntoStack(word);
       await convex.mutation(api.matches.rebuildTap, {
         sessionToken,
         code: matchCode,
@@ -601,29 +615,21 @@ async function onMatchTap(word: string): Promise<void> {
       });
       return;
     }
-    busy = true;
-    rebuildAt += 1;
+    if (!matchNeedsAdd(matchView)) return;
+    if (matchView.stack.includes(word)) return;
+    stack.push(word);
     paintTiles();
     await dropWordOntoStack(word);
-    await convex.mutation(api.matches.rebuildTap, {
+    renderedStack = stack.slice();
+    await convex.mutation(api.matches.addWord, {
       sessionToken,
       code: matchCode,
       word,
     });
-    return;
+  } finally {
+    matchTapInFlight = false;
+    busy = false;
   }
-  if (!matchNeedsAdd(matchView)) return;
-  if (matchView.stack.includes(word)) return;
-  busy = true;
-  stack.push(word);
-  paintTiles();
-  await dropWordOntoStack(word);
-  renderedStack = stack.slice();
-  await convex.mutation(api.matches.addWord, {
-    sessionToken,
-    code: matchCode,
-    word,
-  });
 }
 
 function matchSeat(view: MatchView): "host" | "guest" | null {
@@ -665,6 +671,7 @@ function stopMatchSub(): void {
   pvpMemorize = false;
   pvpWasUnlocked = false;
   pvpTimeoutSent = false;
+  matchTapInFlight = false;
   renderedStack = [];
 }
 
