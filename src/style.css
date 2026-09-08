@@ -579,15 +579,32 @@ header .logo {
   gap: 10px;
   margin-top: 28px;
 }
+#daily .daily-actions {
+  grid-template-columns: 1fr 1fr;
+}
+.daily-play-label {
+  grid-column: 1 / -1;
+  margin: 0 0 2px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
 #daily-pvc, #wait-copy {
   width: 100%;
 }
+#daily-pvc, #daily-pvp {
+  width: 100%;
+  min-width: 0;
+  padding: 14px 12px;
+  white-space: nowrap;
+}
 #daily-pvp {
-  background: none;
+  background: #fff;
+  color: #000;
   border: 0;
-  color: #fff;
+  border-radius: 999px;
   font: inherit;
   font-size: 16px;
-  padding: 8px;
   cursor: pointer;
 }

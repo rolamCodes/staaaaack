@@ -188,11 +188,11 @@
       <section class="guide-slide">
         <p class="daily-date" id="daily-date"></p>
         <h2 id="daily-theme">Today</h2>
-        <p>Play today’s list against the computer, or share a match with another player.</p>
       </section>
-      <div class="daily-actions">
-        <button type="button" id="daily-pvc">Play vs computer</button>
-        <button type="button" id="daily-pvp">Play vs player</button>
+      <div class="daily-actions" role="group" aria-labelledby="daily-play-label">
+        <p id="daily-play-label" class="daily-play-label">Play against</p>
+        <button type="button" id="daily-pvc">Computer</button>
+        <button type="button" id="daily-pvp">Other player</button>
       </div>
     </div>
   </div>
