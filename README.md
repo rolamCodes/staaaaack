@@ -40,8 +40,10 @@ Or upload `dist` in the Cloudflare dashboard. Set `VITE_CONVEX_URL` in the Pages
 
 ## Play
 
-- Claim a handle (3–16 `a-zA-Z0-9_`) and a passphrase (6+). New browser: sign in again.
-- First ranked play shows a five-slide how-to. Open it again from How to play in the hamburger. `/playtest` shows it on every load.
+- Sign in with a handle (3–16 `a-zA-Z0-9_`) and password (6+), or switch to Sign up. New browser: sign in again.
+- First play shows a six-slide how-to (including Tutorial), then a 5-word run on a full word sheet. Stable coach tips guide the first two picks; the player finishes the attempt alone. Win or lose, their tutorial score leads into today’s game. The tutorial is not skippable for new accounts.
+- After the tutorial, Play starts today’s ranked 15-word run.
+- `/playtest` is unranked and replayable. Use the Tutorial menu toggle to force the carousel + guided run; default is Off.
 - Today’s 15 words come from the server. Lists loop after day 99.
 - One 60s budget for the whole run. It ticks in every phase. Each correct word adds +3s.
 - After the computer adds, the word sheet collapses. Pull it back up when you’ve memorized, then rebuild.

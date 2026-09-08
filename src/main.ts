@@ -3,12 +3,30 @@ import { ConvexClient } from "convex/browser";
 import { api } from "../convex/_generated/api";
 
 const TOKEN_KEY = "staaaaack-session";
+const PLAYTEST_TUTORIAL_KEY = "staaaaack-playtest-tutorial";
 const CIRC = 2 * Math.PI * 15.5;
 const START_BUDGET_MS = 60_000;
 const INCREMENT_MS = 3_000;
 const SHEET_PEEK = 44;
 const SHEET_PULL_THRESHOLD = 72;
 const WORD_DROP_MS = 340;
+const TUTORIAL_WORDS = [
+  "Mayo",
+  "Tomato",
+  "Cheese",
+  "Lettuce",
+  "Bacon",
+  "Pickle",
+  "Mustard",
+  "Onion",
+  "Avocado",
+  "Turkey",
+  "Ham",
+  "Tuna",
+  "Olive",
+  "Pepper",
+  "Sprouts",
+];
 const isPlaytest =
   window.location.pathname.replace(/\/+$/, "") === "/playtest";
 
@@ -40,9 +58,14 @@ const menuFeedback = document.getElementById(
 const menuSignout = document.getElementById(
   "menu-signout"
 ) as HTMLButtonElement;
+const menuTutorial = document.getElementById(
+  "menu-tutorial"
+) as HTMLButtonElement;
+const menuTutorialState = document.getElementById("menu-tutorial-state")!;
 const againBtn = document.getElementById("again") as HTMLButtonElement;
 const seeBoardBtn = document.getElementById("see-board") as HTMLButtonElement;
 const tomorrowEl = document.getElementById("tomorrow")!;
+const endKickerEl = document.getElementById("end-kicker")!;
 const playtestNoteEl = document.getElementById("playtest-note")!;
 const boardRows = document.getElementById("board-rows")!;
 const boardEmpty = document.getElementById("board-empty")!;
@@ -51,16 +74,29 @@ const gateForm = document.getElementById("gate-form") as HTMLFormElement;
 const gateHandle = document.getElementById("gate-handle") as HTMLInputElement;
 const gatePass = document.getElementById("gate-pass") as HTMLInputElement;
 const gateError = document.getElementById("gate-error")!;
-const gateIn = document.getElementById("gate-in")!;
+const gateSubmit = document.getElementById("gate-submit") as HTMLButtonElement;
+const gateModeBtn = document.getElementById("gate-mode") as HTMLButtonElement;
+const gateSwitchLead = document.getElementById("gate-switch-lead")!;
 const guideEl = document.getElementById("guide")!;
 const guideGo = document.getElementById("guide-go")!;
 const guideTrack = document.getElementById("guide-track")!;
 const guideViewport = document.getElementById("guide-viewport")!;
 const guideDots = [...document.querySelectorAll("#guide-dots button")];
 const menuHowto = document.getElementById("menu-howto") as HTMLButtonElement;
-const GUIDE_STEPS = 5;
+const coachEl = document.getElementById("coach")!;
+const coachTip = document.getElementById("coach-tip")!;
+const GUIDE_STEPS = 6;
 let guideStep = 0;
 let guideBlocking = false;
+let gateMode: "signin" | "signup" = "signin";
+
+type CoachStep =
+  | "tap-add"
+  | "computer-add"
+  | "memorize"
+  | "pull"
+  | "rebuild"
+  | null;
 
 let sessionToken = localStorage.getItem(TOKEN_KEY);
 let currentHandle = "";
@@ -75,10 +111,19 @@ let endurance = false;
 let endurancePass = 0;
 let submittedToday = false;
 let audio: AudioContext | undefined;
+let targetWords = 15;
+let tutorialActive = false;
+let tutorialCleared = false;
+let needsTutorial = false;
+let coachStep: CoachStep = null;
+let playtestTutorialOn =
+  isPlaytest && localStorage.getItem(PLAYTEST_TUTORIAL_KEY) === "1";
 
 if (isPlaytest) {
   document.title = "staaaaack · playtest";
   playtestNoteEl.hidden = false;
+  menuTutorial.hidden = false;
+  syncPlaytestTutorialMenu();
 }
 const mem = {
   duration: 0,
@@ -90,6 +135,14 @@ const mem = {
   started: 0,
   onDone: null as null | (() => void),
 };
+
+function syncPlaytestTutorialMenu(): void {
+  menuTutorial.setAttribute(
+    "aria-pressed",
+    playtestTutorialOn ? "true" : "false"
+  );
+  menuTutorialState.textContent = playtestTutorialOn ? "On" : "Off";
+}
 
 function unused(): string[] {
   const set = new Set(stack);
@@ -180,6 +233,132 @@ function collapseSheet(): void {
   gridSheetEl.classList.add("collapsed", "pullable");
   gridSheetEl.style.transition = "";
   gridSheetEl.style.transform = "";
+}
+
+function clearCoachHighlights(): void {
+  for (const el of document.querySelectorAll(".coach-hi, .coach-lift")) {
+    el.classList.remove("coach-hi", "coach-lift");
+  }
+}
+
+function hideCoach(): void {
+  coachStep = null;
+  coachEl.classList.remove("show");
+  coachEl.hidden = true;
+  coachTip.textContent = "";
+  coachTip.className = "";
+  clearCoachHighlights();
+  document.getElementById("app")!.classList.remove("coach-timer");
+}
+
+function showCoach(
+  step: CoachStep,
+  text: string,
+  targets: Element[]
+): void {
+  if (!tutorialCoachActive() || !step) {
+    hideCoach();
+    return;
+  }
+  coachStep = step;
+  clearCoachHighlights();
+  document.getElementById("app")!.classList.remove("coach-timer");
+  let liftsSheet = false;
+  for (const el of targets) {
+    el.classList.add("coach-hi");
+    if (el === timerEl) {
+      document.getElementById("app")!.classList.add("coach-timer");
+    }
+    if (tiles.includes(el as HTMLButtonElement)) liftsSheet = true;
+  }
+  if (liftsSheet) gridSheetEl.classList.add("coach-lift");
+  coachTip.textContent = text;
+  coachTip.className = "";
+  coachEl.hidden = false;
+  coachEl.classList.add("show");
+}
+
+function shakeCoachTip(): void {
+  coachTip.classList.remove("shake");
+  void coachTip.offsetWidth;
+  coachTip.classList.add("shake");
+}
+
+function coachUnusedTiles(): HTMLButtonElement[] {
+  const used = new Set(stack);
+  return tiles.filter((b) => !used.has(b.dataset.word ?? ""));
+}
+
+function coachExpectedTile(): HTMLButtonElement | null {
+  const expected = stack[rebuildAt];
+  if (!expected) return null;
+  return tiles.find((b) => b.dataset.word === expected) ?? null;
+}
+
+function tutorialCoachActive(): boolean {
+  if (!tutorialActive) return false;
+  return phase === "add" ? stack.length < 4 : stack.length <= 4;
+}
+
+function updateCoachForPhase(): void {
+  if (!tutorialCoachActive() || phase === "over") {
+    hideCoach();
+    return;
+  }
+  if (phase === "add") {
+    const unusedTiles = coachUnusedTiles();
+    const firstCycle = stack.length === 0;
+    showCoach(
+      "tap-add",
+      firstCycle
+        ? "Tap a word to add it to the stack"
+        : "Your turn again — pick one more word",
+      unusedTiles
+    );
+    return;
+  }
+  if (phase === "memorize") {
+    if (coachStep === "pull") {
+      showCoach(
+        "pull",
+        "Pull the sheet up when you’re ready to rebuild",
+        [gridSheetEl]
+      );
+      return;
+    }
+    showCoach(
+      "memorize",
+      "Memorize the stack — oldest at the bottom, newest on top",
+      [stackEl]
+    );
+    window.setTimeout(() => {
+      if (!tutorialCoachActive() || phase !== "memorize") return;
+      showCoach(
+        "pull",
+        "Pull the sheet up when you’re ready to rebuild",
+        [gridSheetEl]
+      );
+    }, 2200);
+    return;
+  }
+  if (phase === "stack") {
+    const expected = coachExpectedTile();
+    showCoach(
+      "rebuild",
+      "Rebuild oldest-first. Tap the highlighted word.",
+      expected ? [expected] : []
+    );
+  }
+}
+
+async function showComputerAddCoach(): Promise<void> {
+  if (!tutorialCoachActive() || stack.length !== 1) return;
+  showCoach(
+    "computer-add",
+    "The computer picks next. Watch where its word lands.",
+    [stackEl]
+  );
+  await sleep(1400);
 }
 
 function makeTiles(list: string[]): void {
@@ -359,7 +538,7 @@ function cancelMem(): void {
   mem.raf = 0;
 }
 
-function startBudget(): void {
+function startBudget(paused = false): void {
   if (mem.running) return;
   mem.onDone = () => {
     void gameOver();
@@ -367,16 +546,20 @@ function startBudget(): void {
   mem.duration = START_BUDGET_MS;
   mem.left = START_BUDGET_MS;
   mem.running = true;
-  mem.paused = false;
+  mem.paused = paused;
   mem.started = performance.now();
   mem.lastSec = Math.ceil(mem.left / 1000);
   setTimerRun(mem.left);
-  beep(false);
+  if (!paused) beep(false);
   loopMem();
 }
 
 function grantIncrement(): void {
   if (!mem.running || phase === "over") return;
+  if (tutorialActive) {
+    beepIncrement();
+    return;
+  }
   mem.left += INCREMENT_MS;
   mem.lastSec = Math.ceil(mem.left / 1000);
   setTimerRun(mem.left);
@@ -419,6 +602,7 @@ function pauseMem(): void {
 
 function resumeMem(): void {
   if (!mem.running || !mem.paused) return;
+  if (tutorialActive) return;
   mem.paused = false;
   mem.lastSec = Math.ceil(mem.left / 1000);
 }
@@ -431,7 +615,8 @@ function startAdd(): void {
   paintTiles();
   renderStack();
   busy = false;
-  startBudget();
+  if (!mem.running) startBudget(tutorialActive);
+  updateCoachForPhase();
 }
 
 async function startMemorize(): Promise<void> {
@@ -446,11 +631,13 @@ async function startMemorize(): Promise<void> {
   await flipShuffle();
   if (endEl.classList.contains("show") || phase !== "memorize") return;
   collapseSheet();
+  updateCoachForPhase();
 }
 
 async function finishMemorize(): Promise<void> {
   if (phase !== "memorize") return;
   phase = "stack";
+  hideCoach();
   applyStackDismiss(1, true);
   gridSheetEl.classList.remove("collapsed", "pullable", "dragging");
   gridSheetEl.style.transition = "transform 320ms cubic-bezier(.2,.7,.2,1)";
@@ -471,6 +658,7 @@ function startRebuild(): void {
   resetStackMotion();
   paintTiles();
   busy = false;
+  updateCoachForPhase();
 }
 
 async function startEnduranceRound(): Promise<void> {
@@ -506,7 +694,8 @@ async function onTap(word: string): Promise<void> {
       return;
     }
     const left = unused();
-    if (left.length) {
+    if (left.length && stack.length < targetWords) {
+      await showComputerAddCoach();
       await sleep(80);
       if (phase !== "add") {
         renderStack();
@@ -527,6 +716,14 @@ async function onTap(word: string): Promise<void> {
   if (phase === "stack") {
     const expected = stack[rebuildAt];
     if (word !== expected) {
+      if (tutorialCoachActive()) {
+        shakeCoachTip();
+        return;
+      }
+      if (tutorialActive) {
+        void finishTutorial();
+        return;
+      }
       void gameOver();
       return;
     }
@@ -540,14 +737,19 @@ async function onTap(word: string): Promise<void> {
       return;
     }
     if (rebuildAt === stack.length) {
-      if (stack.length < 15) {
+      if (stack.length < targetWords) {
         score = stack.length;
         startAdd();
         return;
       }
+      if (tutorialActive) {
+        score = targetWords;
+        void finishTutorial();
+        return;
+      }
       if (!endurance) {
         endurance = true;
-        score = 15;
+        score = targetWords;
         endurancePass = 0;
       } else {
         score *= 2;
@@ -557,21 +759,51 @@ async function onTap(word: string): Promise<void> {
       return;
     }
     busy = false;
+    updateCoachForPhase();
   }
 }
 
-async function gameOver(): Promise<void> {
+async function finishTutorial(): Promise<void> {
   if (phase === "over") return;
   cancelMem();
   setTimerIdle();
   phase = "over";
+  tutorialCleared = true;
+  hideCoach();
+  resetStackMotion();
+  expandSheet(false);
+  paintTiles();
+  renderStack();
+  document.getElementById("end-title")!.textContent = "YOU’RE READY";
+  endKickerEl.hidden = false;
+  document.getElementById("end-score")!.textContent = String(score);
+  endEl.classList.add("show");
+  againBtn.hidden = false;
+  againBtn.textContent = "Play today’s game";
+  seeBoardBtn.hidden = true;
+  tomorrowEl.hidden = true;
+  playtestNoteEl.hidden = true;
+}
+
+async function gameOver(): Promise<void> {
+  if (phase === "over") return;
+  if (tutorialActive) {
+    await finishTutorial();
+    return;
+  }
+  cancelMem();
+  setTimerIdle();
+  phase = "over";
+  hideCoach();
   resetStackMotion();
   expandSheet(false);
   paintTiles();
   renderStack();
   document.getElementById("end-title")!.textContent = "GAME OVER";
+  endKickerEl.hidden = true;
   document.getElementById("end-score")!.textContent = String(score);
   endEl.classList.add("show");
+  againBtn.textContent = "Play again";
 
   if (!isPlaytest && sessionToken && !submittedToday) {
     submittedToday = true;
@@ -652,12 +884,25 @@ function showGateError(msg: string): void {
   gateError.textContent = msg;
 }
 
+function setGateMode(mode: "signin" | "signup"): void {
+  gateMode = mode;
+  gateError.hidden = true;
+  gateSubmit.textContent = mode === "signin" ? "Sign in" : "Sign up";
+  gatePass.setAttribute(
+    "autocomplete",
+    mode === "signin" ? "current-password" : "new-password"
+  );
+  gateSwitchLead.textContent =
+    mode === "signin" ? "Don't have an account?" : "Already have an account?";
+  gateModeBtn.textContent = mode === "signin" ? "Sign up" : "Sign in";
+}
+
 async function submitAuth(mode: "claim" | "signin"): Promise<void> {
   const handle = gateHandle.value.trim();
   const password = gatePass.value;
   gateError.hidden = true;
   if (!handle || !password) {
-    showGateError("Enter a handle and passphrase");
+    showGateError("Enter a handle and password");
     return;
   }
   const fn = mode === "claim" ? api.auth.claimHandle : api.auth.signIn;
@@ -670,6 +915,11 @@ async function submitAuth(mode: "claim" | "signin"): Promise<void> {
   localStorage.setItem(TOKEN_KEY, result.token);
   gateEl.classList.remove("show");
   await afterAuth();
+}
+
+function shouldForceTutorial(onboarded: boolean): boolean {
+  if (!onboarded) return true;
+  return isPlaytest && playtestTutorialOn;
 }
 
 async function afterAuth(): Promise<void> {
@@ -686,7 +936,8 @@ async function afterAuth(): Promise<void> {
   }
   currentHandle = me.handle;
   menuHandle.textContent = `@${me.handle}`;
-  if (isPlaytest || !me.onboarded) {
+  needsTutorial = shouldForceTutorial(me.onboarded);
+  if (needsTutorial) {
     showGuide(0, true);
     return;
   }
@@ -706,11 +957,12 @@ function showGuide(step: number, blocking = guideBlocking): void {
 
 async function finishGuide(): Promise<void> {
   const replay = !guideBlocking;
-  if (sessionToken) {
-    await convex.mutation(api.players.completeOnboarding, { sessionToken });
-  }
   guideEl.classList.remove("show");
   guideBlocking = false;
+  if (needsTutorial) {
+    await startTutorial();
+    return;
+  }
   if (replay) {
     resumeMem();
     return;
@@ -720,7 +972,57 @@ async function finishGuide(): Promise<void> {
   await boot(isPlaytest ? false : Boolean(me?.todaySubmitted), me?.todayScore);
 }
 
+async function startTutorial(): Promise<void> {
+  tutorialActive = true;
+  tutorialCleared = false;
+  targetWords = 5;
+  hideCoach();
+  cancelMem();
+  setTimerIdle();
+  endEl.classList.remove("show");
+  scoresEl.classList.remove("show");
+  guideEl.classList.remove("show");
+  closeMenu(false);
+  stack = [];
+  rebuildAt = 0;
+  score = 0;
+  endurance = false;
+  endurancePass = 0;
+  phase = "add";
+  submittedToday = false;
+  againBtn.textContent = "Play again";
+  endKickerEl.hidden = true;
+  words = TUTORIAL_WORDS.slice();
+  makeTiles(words);
+  paintTiles();
+  resetStackMotion();
+  renderStack();
+  expandSheet(false);
+  showPlayableEnd();
+  if (isPlaytest) playtestNoteEl.hidden = true;
+  startAdd();
+}
+
+async function finishTutorialAndPlay(): Promise<void> {
+  if (sessionToken) {
+    await convex.mutation(api.players.completeOnboarding, { sessionToken });
+  }
+  needsTutorial = false;
+  tutorialActive = false;
+  tutorialCleared = false;
+  targetWords = 15;
+  hideCoach();
+  againBtn.textContent = "Play again";
+  endKickerEl.hidden = true;
+  if (isPlaytest) playtestNoteEl.hidden = false;
+  await boot(false);
+}
+
 async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<void> {
+  tutorialActive = false;
+  tutorialCleared = false;
+  targetWords = 15;
+  hideCoach();
   cancelMem();
   setTimerIdle();
   endEl.classList.remove("show");
@@ -734,6 +1036,9 @@ async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<voi
   endurancePass = 0;
   phase = "add";
   submittedToday = isPlaytest ? false : alreadySubmitted;
+  againBtn.textContent = "Play again";
+  endKickerEl.hidden = true;
+  if (isPlaytest) playtestNoteEl.hidden = false;
 
   const today = await convex.query(api.game.getToday, {});
   words = today.words.slice();
@@ -839,18 +1144,58 @@ async function signOut(): Promise<void> {
   closeMenu(false);
   cancelMem();
   setTimerIdle();
+  hideCoach();
   sessionToken = null;
   currentHandle = "";
+  tutorialActive = false;
+  tutorialCleared = false;
+  needsTutorial = false;
+  targetWords = 15;
   localStorage.removeItem(TOKEN_KEY);
   endEl.classList.remove("show");
   scoresEl.classList.remove("show");
   guideEl.classList.remove("show");
   guideBlocking = false;
+  againBtn.textContent = "Play again";
   gateEl.classList.add("show");
   gatePass.value = "";
+  setGateMode("signin");
   if (token) {
     await convex.mutation(api.players.signOut, { sessionToken: token });
   }
+}
+
+async function togglePlaytestTutorial(): Promise<void> {
+  playtestTutorialOn = !playtestTutorialOn;
+  localStorage.setItem(PLAYTEST_TUTORIAL_KEY, playtestTutorialOn ? "1" : "0");
+  syncPlaytestTutorialMenu();
+  closeMenu(false);
+  scoresEl.classList.remove("show");
+  guideEl.classList.remove("show");
+  endEl.classList.remove("show");
+  hideCoach();
+  cancelMem();
+  setTimerIdle();
+  tutorialActive = false;
+  tutorialCleared = false;
+  if (playtestTutorialOn) {
+    needsTutorial = true;
+    showGuide(0, true);
+    return;
+  }
+  let onboarded = true;
+  if (sessionToken) {
+    const me = await convex.query(api.players.getMe, { sessionToken });
+    onboarded = Boolean(me?.onboarded);
+  }
+  needsTutorial = !onboarded;
+  if (needsTutorial) {
+    targetWords = 5;
+    showGuide(0, true);
+    return;
+  }
+  targetWords = 15;
+  await boot(false);
 }
 
 menuButton.addEventListener("click", () => {
@@ -870,7 +1215,10 @@ menuHowto.addEventListener("click", () => {
   closeMenu(false);
   scoresEl.classList.remove("show");
   pauseMem();
-  showGuide(0, false);
+  showGuide(0, needsTutorial);
+});
+menuTutorial.addEventListener("click", () => {
+  void togglePlaytestTutorial();
 });
 menuFeedback.addEventListener("click", () => {
   closeMenu();
@@ -880,6 +1228,14 @@ menuSignout.addEventListener("click", () => {
 });
 scoresEl.addEventListener("click", closeScores);
 againBtn.addEventListener("click", () => {
+  if (tutorialCleared) {
+    void finishTutorialAndPlay();
+    return;
+  }
+  if (tutorialActive) {
+    void startTutorial();
+    return;
+  }
   if (submittedToday && !isPlaytest) return;
   void boot(false);
 });
@@ -888,10 +1244,10 @@ seeBoardBtn.addEventListener("click", (e) => {
 });
 gateForm.addEventListener("submit", (e) => {
   e.preventDefault();
-  void submitAuth("claim");
+  void submitAuth(gateMode === "signup" ? "claim" : "signin");
 });
-gateIn.addEventListener("click", () => {
-  void submitAuth("signin");
+gateModeBtn.addEventListener("click", () => {
+  setGateMode(gateMode === "signin" ? "signup" : "signin");
 });
 guideGo.addEventListener("click", () => {
   if (guideStep >= GUIDE_STEPS - 1) {
@@ -923,7 +1279,11 @@ window.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (menuButton.getAttribute("aria-expanded") === "true") {
     closeMenu();
-  } else if (guideEl.classList.contains("show") && !guideBlocking) {
+  } else if (
+    guideEl.classList.contains("show") &&
+    !guideBlocking &&
+    !needsTutorial
+  ) {
     guideEl.classList.remove("show");
     resumeMem();
   } else if (scoresEl.classList.contains("show")) {
@@ -931,6 +1291,8 @@ window.addEventListener("keydown", (e) => {
     resumeMem();
   }
 });
+
+setGateMode("signin");
 
 if (sessionToken) {
   void afterAuth();
