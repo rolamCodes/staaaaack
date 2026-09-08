@@ -240,8 +240,10 @@ function expandSheet(animated: boolean): void {
   }
 }
 
-function collapseSheet(): void {
-  gridSheetEl.classList.add("collapsed", "pullable");
+function collapseSheet(pullable = true): void {
+  gridSheetEl.classList.add("collapsed");
+  gridSheetEl.classList.toggle("pullable", pullable);
+  gridSheetEl.classList.remove("dragging");
   gridSheetEl.style.transition = "";
   gridSheetEl.style.transform = "";
 }
@@ -667,6 +669,7 @@ function stopMatchSub(): void {
 }
 
 function showDailyModal(dayId: string, theme: string): void {
+  collapseSheet(false);
   waitEl.classList.remove("show");
   endEl.classList.remove("show");
   dailyDateEl.textContent = formatDayId(dayId);
@@ -675,6 +678,7 @@ function showDailyModal(dayId: string, theme: string): void {
 }
 
 function showWaitModal(code: string): void {
+  collapseSheet(false);
   dailyEl.classList.remove("show");
   waitCodeEl.textContent = code;
   waitEl.classList.add("show");
@@ -898,7 +902,6 @@ async function showDailyFromToday(): Promise<void> {
   paintTiles();
   resetStackMotion();
   renderStack();
-  expandSheet(false);
   showDailyModal(today.dayId, today.theme);
 }
 
@@ -1169,6 +1172,7 @@ async function finishGuide(): Promise<void> {
 async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<void> {
   cancelMem();
   setTimerIdle();
+  collapseSheet(false);
   endEl.classList.remove("show");
   scoresEl.classList.remove("show");
   guideEl.classList.remove("show");
@@ -1201,7 +1205,6 @@ async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<voi
   paintTiles();
   resetStackMotion();
   renderStack();
-  expandSheet(false);
   showPlayableEnd();
   showDailyModal(today.dayId, today.theme);
 }
