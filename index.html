@@ -93,13 +93,20 @@
   </div>
   <div id="gate">
     <form id="gate-form" autocomplete="on">
+      <h2 id="gate-title">Sign in</h2>
+      <p id="gate-hint">Welcome back.</p>
       <input id="gate-handle" type="text" name="username" maxlength="16" autocapitalize="off" autocomplete="username"
-        placeholder="Handle" spellcheck="false">
+        placeholder="Username" spellcheck="false" aria-label="Username">
       <input id="gate-pass" type="password" name="password" minlength="6" autocomplete="current-password"
-        placeholder="Passphrase">
-      <p id="gate-error" hidden></p>
-      <button type="submit" id="gate-claim">Claim handle</button>
-      <button type="button" id="gate-in">Sign in</button>
+        placeholder="Password" aria-label="Password">
+      <input id="gate-pass-confirm" type="password" name="new-password" minlength="6" autocomplete="new-password"
+        placeholder="Confirm password" aria-label="Confirm password" hidden>
+      <p id="gate-error" hidden role="alert"></p>
+      <button type="submit" id="gate-submit">Sign in</button>
+      <p id="gate-switch">
+        <span id="gate-switch-text">Don't have an account?</span>
+        <button type="button" id="gate-switch-btn">Sign up</button>
+      </p>
     </form>
   </div>
   <div id="guide">
