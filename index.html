@@ -87,6 +87,7 @@
     <button type="button" id="see-board" hidden>See board</button>
     <p id="tomorrow" hidden>Back tomorrow</p>
     <p id="playtest-note" hidden>Playtest scores are unranked</p>
+    <p id="pvp-note" hidden>Unranked match</p>
   </div>
   <div id="scores">
     <div class="card board">
@@ -179,6 +180,31 @@
           <button type="button" aria-label="New theme every day"></button>
         </div>
         <button type="button" id="guide-go">Next</button>
+      </div>
+    </div>
+  </div>
+  <div id="daily">
+    <div class="guide-card">
+      <section class="guide-slide">
+        <p class="daily-date" id="daily-date"></p>
+        <h2 id="daily-theme">Today</h2>
+        <p>Play today’s list against the computer, or share a match with another player.</p>
+      </section>
+      <div class="daily-actions">
+        <button type="button" id="daily-pvc">Play vs computer</button>
+        <button type="button" id="daily-pvp">Play vs player</button>
+      </div>
+    </div>
+  </div>
+  <div id="wait">
+    <div class="guide-card">
+      <section class="guide-slide">
+        <p class="daily-date">Match code</p>
+        <h2 id="wait-code">--------</h2>
+        <p>Share this link. Player 2 joins and makes the first move.</p>
+      </section>
+      <div class="daily-actions">
+        <button type="button" id="wait-copy">Copy link</button>
       </div>
     </div>
   </div>
