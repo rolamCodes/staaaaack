@@ -7,7 +7,6 @@ import { getTodayInfo } from "./lists";
 
 const START_BUDGET_MS = 30_000;
 const INCREMENT_MS = 1_000;
-const MAX_SCORE = 15 * 2 ** 12;
 const CODE_CHARS = "abcdefghjkmnpqrstuvwxyz23456789";
 
 const statusValidator = v.union(
@@ -32,7 +31,6 @@ const matchView = v.object({
   rebuildAt: v.number(),
   status: statusValidator,
   endurance: v.boolean(),
-  score: v.number(),
   winnerId: v.union(v.id("players"), v.null()),
   p1LeftMs: v.number(),
   p2LeftMs: v.number(),
@@ -52,7 +50,6 @@ type MatchView = {
   rebuildAt: number;
   status: Doc<"matches">["status"];
   endurance: boolean;
-  score: number;
   winnerId: Id<"players"> | null;
   p1LeftMs: number;
   p2LeftMs: number;
@@ -108,7 +105,6 @@ async function toView(
     rebuildAt: match.rebuildAt,
     status: match.status,
     endurance: match.endurance,
-    score: match.score,
     winnerId: match.winnerId ?? null,
     p1LeftMs: match.p1LeftMs,
     p2LeftMs: match.p2LeftMs,
@@ -390,14 +386,10 @@ export const rebuildTap = mutation({
     const fullFifteen = match.stack.length >= 15;
 
     if (finishedRebuild && fullFifteen) {
-      const nextScore = match.endurance
-        ? Math.min(match.score * 2, MAX_SCORE)
-        : 15;
       await ctx.db.patch(match._id, {
         rebuildAt: 0,
         status: tickingP1 ? "p2_turn" : "p1_turn",
         endurance: true,
-        score: nextScore,
         p1LeftMs: tickingP1 ? nextLeft : p1Left,
         p2LeftMs: tickingP1 ? p2Left : nextLeft,
         turnStartedAt: now,

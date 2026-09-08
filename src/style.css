@@ -339,6 +339,10 @@ header .logo {
   color: #fff;
 }
 
+#end.pvp h2 {
+  margin-bottom: 36px;
+}
+
 #end .score {
   margin: 28px 0 36px;
   font-size: 96px;
@@ -386,7 +390,8 @@ header .logo {
 #playtest-note[hidden],
 #pvp-note[hidden],
 #see-board[hidden],
-#again[hidden] {
+#again[hidden],
+#end-score[hidden] {
   display: none;
 }
 

@@ -30,7 +30,6 @@ type MatchView = {
   rebuildAt: number;
   status: MatchStatus;
   endurance: boolean;
-  score: number;
   winnerId: Id<"players"> | null;
   p1LeftMs: number;
   p2LeftMs: number;
@@ -78,6 +77,8 @@ const menuSignout = document.getElementById(
 ) as HTMLButtonElement;
 const againBtn = document.getElementById("again") as HTMLButtonElement;
 const seeBoardBtn = document.getElementById("see-board") as HTMLButtonElement;
+const endTitleEl = document.getElementById("end-title")!;
+const endScoreEl = document.getElementById("end-score")!;
 const tomorrowEl = document.getElementById("tomorrow")!;
 const playtestNoteEl = document.getElementById("playtest-note")!;
 const pvpNoteEl = document.getElementById("pvp-note")!;
@@ -682,7 +683,8 @@ function stopMatchSub(): void {
 function showDailyModal(dayId: string, theme: string): void {
   collapseSheet(false);
   waitEl.classList.remove("show");
-  endEl.classList.remove("show");
+  endEl.classList.remove("show", "pvp");
+  endScoreEl.hidden = false;
   dailyDateEl.textContent = formatDayId(dayId);
   dailyThemeEl.textContent = theme;
   dailyEl.classList.add("show");
@@ -702,13 +704,14 @@ function showPvpEnd(view: MatchView): void {
   waitEl.classList.remove("show");
   dailyEl.classList.remove("show");
   const won = Boolean(currentPlayerId && view.winnerId === currentPlayerId);
-  document.getElementById("end-title")!.textContent = won ? "YOU WIN" : "YOU LOSE";
-  document.getElementById("end-score")!.textContent = String(view.score);
+  endTitleEl.textContent = won ? "YOU WIN" : "YOU LOSE";
+  endScoreEl.hidden = true;
+  endScoreEl.textContent = "";
   againBtn.hidden = true;
   seeBoardBtn.hidden = false;
   tomorrowEl.hidden = true;
   pvpNoteEl.hidden = false;
-  endEl.classList.add("show");
+  endEl.classList.add("pvp", "show");
 }
 
 function pvpClockLeft(view: MatchView, seat: "host" | "guest"): number {
@@ -926,8 +929,8 @@ async function startPvcFromDaily(): Promise<void> {
   matchCode = null;
   stopMatchSub();
   if (submittedToday && !isPlaytest) {
-    document.getElementById("end-title")!.textContent = "GAME OVER";
-    document.getElementById("end-score")!.textContent = String(lastTodayScore);
+    endTitleEl.textContent = "GAME OVER";
+    endScoreEl.textContent = String(lastTodayScore);
     endEl.classList.add("show");
     showConsumedEnd();
     return;
@@ -1031,8 +1034,8 @@ async function gameOver(): Promise<void> {
   expandSheet(false);
   paintTiles();
   renderStack();
-  document.getElementById("end-title")!.textContent = "GAME OVER";
-  document.getElementById("end-score")!.textContent = String(score);
+  endTitleEl.textContent = "GAME OVER";
+  endScoreEl.textContent = String(score);
   endEl.classList.add("show");
 
   if (!isPlaytest && !matchCode && sessionToken && !submittedToday) {
@@ -1051,6 +1054,8 @@ async function gameOver(): Promise<void> {
 }
 
 function showConsumedEnd(): void {
+  endEl.classList.remove("pvp");
+  endScoreEl.hidden = false;
   againBtn.hidden = true;
   seeBoardBtn.hidden = false;
   tomorrowEl.hidden = false;
@@ -1058,6 +1063,8 @@ function showConsumedEnd(): void {
 }
 
 function showPlayableEnd(): void {
+  endEl.classList.remove("pvp");
+  endScoreEl.hidden = false;
   againBtn.hidden = false;
   seeBoardBtn.hidden = true;
   tomorrowEl.hidden = true;
@@ -1189,7 +1196,8 @@ async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<voi
   cancelMem();
   setTimerIdle();
   collapseSheet(false);
-  endEl.classList.remove("show");
+  endEl.classList.remove("show", "pvp");
+  endScoreEl.hidden = false;
   scoresEl.classList.remove("show");
   guideEl.classList.remove("show");
   waitEl.classList.remove("show");
@@ -1317,7 +1325,8 @@ async function signOut(): Promise<void> {
   dailyEl.classList.remove("show");
   waitEl.classList.remove("show");
   localStorage.removeItem(TOKEN_KEY);
-  endEl.classList.remove("show");
+  endEl.classList.remove("show", "pvp");
+  endScoreEl.hidden = false;
   scoresEl.classList.remove("show");
   guideEl.classList.remove("show");
   guideBlocking = false;
