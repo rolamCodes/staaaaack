@@ -94,10 +94,19 @@ const boardRows = document.getElementById("board-rows")!;
 const boardEmpty = document.getElementById("board-empty")!;
 const gateEl = document.getElementById("gate")!;
 const gateForm = document.getElementById("gate-form") as HTMLFormElement;
+const gateTitle = document.getElementById("gate-title")!;
+const gateHint = document.getElementById("gate-hint")!;
 const gateHandle = document.getElementById("gate-handle") as HTMLInputElement;
 const gatePass = document.getElementById("gate-pass") as HTMLInputElement;
+const gatePassConfirm = document.getElementById(
+  "gate-pass-confirm"
+) as HTMLInputElement;
 const gateError = document.getElementById("gate-error")!;
-const gateIn = document.getElementById("gate-in")!;
+const gateSubmit = document.getElementById("gate-submit") as HTMLButtonElement;
+const gateSwitchText = document.getElementById("gate-switch-text")!;
+const gateSwitchBtn = document.getElementById(
+  "gate-switch-btn"
+) as HTMLButtonElement;
 const guideEl = document.getElementById("guide")!;
 const guideGo = document.getElementById("guide-go")!;
 const guideTrack = document.getElementById("guide-track")!;
@@ -1118,33 +1127,105 @@ function escapeHtml(s: string): string {
   );
 }
 
+type AuthMode = "signin" | "signup";
+const USERNAME_RE = /^[a-zA-Z0-9_]{3,16}$/;
+let authMode: AuthMode = "signin";
+let authBusy = false;
+
+function friendlyAuthError(msg: string): string {
+  if (msg === "Handle must be 3–16 letters, numbers, or _") {
+    return "Username must be 3–16 letters, numbers, or _";
+  }
+  if (msg === "Passphrase must be at least 6 characters") {
+    return "Password must be at least 6 characters";
+  }
+  if (msg === "Invalid handle or passphrase") {
+    return "Invalid username or password";
+  }
+  if (msg === "Handle already taken") {
+    return "That username is taken";
+  }
+  return msg;
+}
+
+function setAuthMode(mode: AuthMode): void {
+  authMode = mode;
+  const signingIn = mode === "signin";
+  gateTitle.textContent = signingIn ? "Sign in" : "Create account";
+  gateHint.textContent = signingIn
+    ? "Welcome back."
+    : "Username: 3–16 letters, numbers, or _";
+  gateSubmit.textContent = signingIn ? "Sign in" : "Create account";
+  gateSwitchText.textContent = signingIn
+    ? "Don't have an account?"
+    : "Already have an account?";
+  gateSwitchBtn.textContent = signingIn ? "Sign up" : "Sign in";
+  gatePass.autocomplete = signingIn ? "current-password" : "new-password";
+  gatePassConfirm.hidden = signingIn;
+  gatePassConfirm.value = "";
+  gateError.hidden = true;
+}
+
 function showGateError(msg: string): void {
   gateError.hidden = false;
   gateError.textContent = msg;
 }
 
-async function submitAuth(mode: "claim" | "signin"): Promise<void> {
+async function submitAuth(): Promise<void> {
+  if (authBusy) return;
   const handle = gateHandle.value.trim();
   const password = gatePass.value;
   gateError.hidden = true;
   if (!handle || !password) {
-    showGateError("Enter a handle and passphrase");
+    showGateError("Enter a username and password");
     return;
   }
-  const fn = mode === "claim" ? api.auth.claimHandle : api.auth.signIn;
-  const result = await convex.action(fn, { handle, password });
-  if (!result.success || !result.token) {
-    showGateError(result.error ?? "Could not sign in");
-    return;
+  if (authMode === "signup") {
+    if (!USERNAME_RE.test(handle)) {
+      showGateError("Username must be 3–16 letters, numbers, or _");
+      return;
+    }
+    if (password.length < 6) {
+      showGateError("Password must be at least 6 characters");
+      return;
+    }
+    if (password !== gatePassConfirm.value) {
+      showGateError("Passwords do not match");
+      return;
+    }
   }
-  sessionToken = result.token;
-  localStorage.setItem(TOKEN_KEY, result.token);
-  gateEl.classList.remove("show");
-  await afterAuth();
+  authBusy = true;
+  gateSubmit.disabled = true;
+  gateSwitchBtn.disabled = true;
+  const submitLabel = authMode === "signin" ? "Sign in" : "Create account";
+  gateSubmit.textContent =
+    authMode === "signin" ? "Signing in…" : "Creating account…";
+  try {
+    const fn = authMode === "signup" ? api.auth.claimHandle : api.auth.signIn;
+    const result = await convex.action(fn, { handle, password });
+    if (!result.success || !result.token) {
+      showGateError(
+        friendlyAuthError(result.error ?? "Could not sign in")
+      );
+      return;
+    }
+    sessionToken = result.token;
+    localStorage.setItem(TOKEN_KEY, result.token);
+    gateEl.classList.remove("show");
+    await afterAuth();
+  } catch {
+    showGateError("Could not sign in");
+  } finally {
+    authBusy = false;
+    gateSubmit.disabled = false;
+    gateSwitchBtn.disabled = false;
+    gateSubmit.textContent = submitLabel;
+  }
 }
 
 async function afterAuth(): Promise<void> {
   if (!sessionToken) {
+    setAuthMode("signin");
     gateEl.classList.add("show");
     return;
   }
@@ -1152,6 +1233,7 @@ async function afterAuth(): Promise<void> {
   if (!me) {
     sessionToken = null;
     localStorage.removeItem(TOKEN_KEY);
+    setAuthMode("signin");
     gateEl.classList.add("show");
     return;
   }
@@ -1330,8 +1412,10 @@ async function signOut(): Promise<void> {
   scoresEl.classList.remove("show");
   guideEl.classList.remove("show");
   guideBlocking = false;
+  setAuthMode("signin");
   gateEl.classList.add("show");
   gatePass.value = "";
+  gatePassConfirm.value = "";
   if (token) {
     await convex.mutation(api.players.signOut, { sessionToken: token });
   }
@@ -1391,10 +1475,10 @@ seeBoardBtn.addEventListener("click", (e) => {
 });
 gateForm.addEventListener("submit", (e) => {
   e.preventDefault();
-  void submitAuth("claim");
+  void submitAuth();
 });
-gateIn.addEventListener("click", () => {
-  void submitAuth("signin");
+gateSwitchBtn.addEventListener("click", () => {
+  setAuthMode(authMode === "signin" ? "signup" : "signin");
 });
 guideGo.addEventListener("click", () => {
   if (guideStep >= GUIDE_STEPS - 1) {
