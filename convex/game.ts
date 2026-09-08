@@ -65,6 +65,20 @@ export const submitRun = mutation({
   },
 });
 
+function compareRuns(
+  a: { score: number; finishedAt: number },
+  b: { score: number; finishedAt: number }
+): number {
+  return b.score - a.score || a.finishedAt - b.finishedAt;
+}
+
+function isBetterRun(
+  candidate: { score: number; finishedAt: number },
+  current: { score: number; finishedAt: number }
+): boolean {
+  return compareRuns(candidate, current) < 0;
+}
+
 export const leaderboard = query({
   args: {},
   returns: v.array(
@@ -76,12 +90,23 @@ export const leaderboard = query({
     })
   ),
   handler: async (ctx) => {
-    const runs = await ctx.db.query("runs").withIndex("by_score").order("desc").take(200);
+    const runs = await ctx.db.query("runs").collect();
 
-    runs.sort((a, b) => b.score - a.score || a.finishedAt - b.finishedAt);
+    const bestByPlayer = new Map<
+      (typeof runs)[number]["playerId"],
+      (typeof runs)[number]
+    >();
+    for (const run of runs) {
+      const existing = bestByPlayer.get(run.playerId);
+      if (!existing || isBetterRun(run, existing)) {
+        bestByPlayer.set(run.playerId, run);
+      }
+    }
+
+    const topRuns = [...bestByPlayer.values()].sort(compareRuns).slice(0, 50);
 
     const rows = [];
-    for (const run of runs.slice(0, 50)) {
+    for (const run of topRuns) {
       const player = await ctx.db.get(run.playerId);
       if (!player) continue;
       rows.push({
