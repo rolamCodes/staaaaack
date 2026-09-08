@@ -39,8 +39,9 @@ type MatchView = {
 
 const TOKEN_KEY = "staaaaack-session";
 const CIRC = 2 * Math.PI * 15.5;
-const START_BUDGET_MS = 60_000;
-const INCREMENT_MS = 3_000;
+const PVC_START_BUDGET_MS = 60_000;
+const PVC_INCREMENT_MS = 3_000;
+const PVP_START_BUDGET_MS = 30_000;
 const SHEET_PEEK = 44;
 const SHEET_PULL_THRESHOLD = 72;
 const WORD_DROP_MS = 340;
@@ -413,7 +414,13 @@ function setTimerIdle(): void {
 function setTimerRun(left: number): void {
   timerEl.className = "run";
   timerNum.textContent = String(Math.max(0, Math.ceil(left / 1000)));
-  const p = Math.max(0, Math.min(1, left / START_BUDGET_MS));
+  const scale =
+    mem.duration > 0
+      ? mem.duration
+      : matchCode
+        ? PVP_START_BUDGET_MS
+        : PVC_START_BUDGET_MS;
+  const p = Math.max(0, Math.min(1, left / scale));
   ringSolid.style.strokeDashoffset = String(CIRC * (1 - p));
   timerEl.removeAttribute("aria-hidden");
 }
@@ -425,10 +432,14 @@ function cancelMem(): void {
   mem.raf = 0;
 }
 
-function startBudgetFrom(left: number, onDone: () => void): void {
+function startBudgetFrom(
+  left: number,
+  onDone: () => void,
+  duration = PVC_START_BUDGET_MS
+): void {
   cancelMem();
   mem.onDone = onDone;
-  mem.duration = START_BUDGET_MS;
+  mem.duration = duration;
   mem.left = left;
   mem.running = true;
   mem.paused = false;
@@ -443,8 +454,8 @@ function startBudget(): void {
   mem.onDone = () => {
     void gameOver();
   };
-  mem.duration = START_BUDGET_MS;
-  mem.left = START_BUDGET_MS;
+  mem.duration = PVC_START_BUDGET_MS;
+  mem.left = PVC_START_BUDGET_MS;
   mem.running = true;
   mem.paused = false;
   mem.started = performance.now();
@@ -456,7 +467,7 @@ function startBudget(): void {
 
 function grantIncrement(): void {
   if (!mem.running || phase === "over") return;
-  mem.left += INCREMENT_MS;
+  mem.left += PVC_INCREMENT_MS;
   mem.lastSec = Math.ceil(mem.left / 1000);
   setTimerRun(mem.left);
   beepIncrement();
@@ -724,6 +735,7 @@ function syncPvpTimer(view: MatchView, seat: "host" | "guest"): void {
     if (view.status === "waiting") {
       setTimerIdle();
     } else {
+      mem.duration = PVP_START_BUDGET_MS;
       setTimerRun(stored);
     }
     return;
@@ -735,9 +747,13 @@ function syncPvpTimer(view: MatchView, seat: "host" | "guest"): void {
     return;
   }
   if (!mem.running || mem.paused) {
-    startBudgetFrom(left, () => {
-      void pvpTimeout();
-    });
+    startBudgetFrom(
+      left,
+      () => {
+        void pvpTimeout();
+      },
+      PVP_START_BUDGET_MS
+    );
   } else {
     mem.left = left;
     mem.lastSec = Math.ceil(left / 1000);

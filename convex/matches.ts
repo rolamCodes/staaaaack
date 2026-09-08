@@ -5,8 +5,8 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { hashSessionToken } from "./lib/session";
 import { getTodayInfo } from "./lists";
 
-const START_BUDGET_MS = 60_000;
-const INCREMENT_MS = 3_000;
+const START_BUDGET_MS = 30_000;
+const INCREMENT_MS = 1_000;
 const MAX_SCORE = 15 * 2 ** 12;
 const CODE_CHARS = "abcdefghjkmnpqrstuvwxyz23456789";
 
