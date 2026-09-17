@@ -57,6 +57,8 @@ const gridEl = document.getElementById("grid")!;
 const gridSheetEl = document.getElementById("grid-sheet")!;
 const stackEl = document.getElementById("stack")!;
 const stackWordsEl = document.getElementById("stack-words")!;
+const hudEl = document.getElementById("hud")!;
+const liveScoreEl = document.getElementById("live-score")!;
 const timerEl = document.getElementById("timer")!;
 const timerNum = timerEl.querySelector(".num")!;
 const ringSolid = timerEl.querySelector(".ring-solid") as SVGCircleElement;
@@ -154,6 +156,23 @@ const mem = {
   started: 0,
   onDone: null as null | (() => void),
 };
+
+function climbScore(n: number): number {
+  return (n * (n + 1)) / 2;
+}
+
+function setScore(next: number): void {
+  const bump = next > score;
+  score = next;
+  liveScoreEl.textContent = String(next);
+  if (!bump) {
+    liveScoreEl.classList.remove("bump");
+    return;
+  }
+  liveScoreEl.classList.remove("bump");
+  void liveScoreEl.offsetWidth;
+  liveScoreEl.classList.add("bump");
+}
 
 function unused(): string[] {
   const set = new Set(stack);
@@ -415,13 +434,17 @@ function flipShuffle(): Promise<void> {
 
 function setTimerIdle(): void {
   cancelMem();
+  hudEl.classList.add("idle");
+  hudEl.classList.remove("pvp");
   timerEl.className = "idle";
   timerNum.textContent = "";
   ringSolid.style.strokeDashoffset = "0";
   timerEl.setAttribute("aria-hidden", "true");
+  liveScoreEl.setAttribute("aria-hidden", "true");
 }
 
 function setTimerRun(left: number): void {
+  hudEl.classList.remove("idle");
   timerEl.className = "run";
   timerNum.textContent = String(Math.max(0, Math.ceil(left / 1000)));
   const scale =
@@ -433,6 +456,13 @@ function setTimerRun(left: number): void {
   const p = Math.max(0, Math.min(1, left / scale));
   ringSolid.style.strokeDashoffset = String(CIRC * (1 - p));
   timerEl.removeAttribute("aria-hidden");
+  if (matchCode) {
+    hudEl.classList.add("pvp");
+    liveScoreEl.setAttribute("aria-hidden", "true");
+  } else {
+    hudEl.classList.remove("pvp");
+    liveScoreEl.removeAttribute("aria-hidden");
+  }
 }
 
 function cancelMem(): void {
@@ -476,7 +506,7 @@ function startBudget(): void {
 }
 
 function grantIncrement(): void {
-  if (!mem.running || phase === "over") return;
+  if (!mem.running || phase === "over" || endurance) return;
   mem.left += PVC_INCREMENT_MS;
   mem.lastSec = Math.ceil(mem.left / 1000);
   setTimerRun(mem.left);
@@ -1015,16 +1045,16 @@ async function onTap(word: string): Promise<void> {
     }
     if (rebuildAt === stack.length) {
       if (stack.length < 15) {
-        score = stack.length;
+        setScore(climbScore(stack.length));
         startAdd();
         return;
       }
       if (!endurance) {
         endurance = true;
-        score = 15;
+        setScore(climbScore(15));
         endurancePass = 0;
       } else {
-        score *= 2;
+        setScore(score * 2);
         endurancePass += 1;
       }
       await startEnduranceRound();
@@ -1286,7 +1316,7 @@ async function boot(alreadySubmitted: boolean, todayScore?: number): Promise<voi
   closeMenu(false);
   stack = [];
   rebuildAt = 0;
-  score = 0;
+  setScore(0);
   endurance = false;
   endurancePass = 0;
   phase = "add";
@@ -1465,6 +1495,9 @@ waitCopyBtn.addEventListener("click", async () => {
   } catch {
     waitCopyBtn.textContent = "Copy failed";
   }
+});
+liveScoreEl.addEventListener("animationend", () => {
+  liveScoreEl.classList.remove("bump");
 });
 againBtn.addEventListener("click", () => {
   if (submittedToday && !isPlaytest) return;

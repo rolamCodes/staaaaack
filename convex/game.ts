@@ -3,7 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { hashSessionToken } from "./lib/session";
 import { getTodayInfo } from "./lists";
 
-const MAX_SCORE = 15 * 2 ** 12;
+const MAX_SCORE = 120 * 2 ** 12;
 
 export const getToday = query({
   args: {},

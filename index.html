@@ -14,12 +14,15 @@
       </svg>
     </button>
     <img class="logo" src="/src/staaaaack.png" alt="staaaaack" style="width: 56px; height: auto;" />
-    <div id="timer" class="idle" aria-hidden="true">
-      <svg viewBox="0 0 40 40">
-        <circle class="ring-solid" cx="20" cy="20" r="15.5" fill="none" stroke="#FFBF00" stroke-width="2.8"
-          stroke-linecap="round" transform="rotate(-90 20 20)" stroke-dasharray="97.39" stroke-dashoffset="0" />
-      </svg>
-      <div class="num"></div>
+    <div id="hud" class="idle">
+      <div id="live-score" aria-live="polite" aria-hidden="true">0</div>
+      <div id="timer" aria-hidden="true">
+        <svg viewBox="0 0 40 40">
+          <circle class="ring-solid" cx="20" cy="20" r="15.5" fill="none" stroke="#FFBF00" stroke-width="2.8"
+            stroke-linecap="round" transform="rotate(-90 20 20)" stroke-dasharray="97.39" stroke-dashoffset="0" />
+        </svg>
+        <div class="num"></div>
+      </div>
     </div>
   </header>
   <div id="stack">
@@ -138,7 +141,8 @@
               </div>
             </div>
             <h2>Race the clock</h2>
-            <p>Each run starts with 60 seconds. Every correct word adds 3 seconds. If the clock hits zero, you lose.</p>
+            <p>Each run starts with 60 seconds. Every correct word adds 3 seconds until you clear all 15. If the clock
+              hits zero, you lose.</p>
           </section>
           <section class="guide-slide">
             <div class="guide-visual">
@@ -157,8 +161,8 @@
               <div class="guide-mult">2×</div>
             </div>
             <h2>Score and double</h2>
-            <p>Score is the stack height after each full rebuild. Clear all 15, then keep restacking — each pass doubles
-              your score.</p>
+            <p>Each word is worth its place in the stack. Clear all 15, then keep restacking — each pass doubles your
+              score. After 15, the clock stops adding time.</p>
           </section>
           <section class="guide-slide">
             <div class="guide-visual">

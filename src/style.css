@@ -38,7 +38,7 @@ body {
 
 header {
   display: grid;
-  grid-template-columns: 36px 1fr 36px;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   padding: 16px;
   z-index: 5;
@@ -50,6 +50,7 @@ header .logo {
   height: 22px;
   width: auto;
   margin: 0 auto;
+  grid-column: 2;
 }
 
 #menu-button {
@@ -61,10 +62,50 @@ header .logo {
   cursor: pointer;
   display: grid;
   place-items: center;
+  justify-self: start;
 }
 
 #menu-button svg {
   display: block;
+}
+
+#hud {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: end;
+  grid-column: 3;
+}
+
+#live-score {
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1;
+  min-width: 3ch;
+  text-align: right;
+  pointer-events: none;
+}
+
+#live-score.bump {
+  animation: score-bump 280ms ease;
+}
+
+@keyframes score-bump {
+  0% {
+    transform: scale(1);
+    color: #fff;
+  }
+
+  40% {
+    transform: scale(1.25);
+    color: var(--yellow);
+  }
+
+  100% {
+    transform: scale(1);
+    color: #fff;
+  }
 }
 
 #timer {
@@ -92,8 +133,13 @@ header .logo {
   pointer-events: none;
 }
 
-#timer.idle {
+#hud.idle #live-score,
+#hud.idle #timer {
   visibility: hidden;
+}
+
+#hud.pvp #live-score {
+  display: none;
 }
 
 #stack {
